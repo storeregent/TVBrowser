@@ -34,7 +34,7 @@ import java.util.Locale
  * directory (pull instructions are in the README).
  */
 @Composable
-fun LogsScreen(activity: android.content.Context) {
+fun LogsScreen(activity: android.app.Activity) {
     var files by remember { mutableStateOf(SessionLog.listLogFiles()) }
     var status by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()

@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
  * device_info_<ts>.json into the log directory.
  */
 @Composable
-fun DeviceInfoScreen(activity: android.content.Context) {
+fun DeviceInfoScreen(activity: android.app.Activity) {
     val info = remember { DeviceInfoCollector.collect(activity) }
     val pretty = remember {
         val json = kotlinx.serialization.json.Json { prettyPrint = true }

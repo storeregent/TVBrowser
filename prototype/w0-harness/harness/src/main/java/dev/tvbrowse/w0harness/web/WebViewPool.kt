@@ -233,7 +233,7 @@ class WebViewPool(private val activity: Activity, private val settings: Settings
                     "RECEIVED_ERROR",
                     jsonObject(
                         "url" to request.url.toString(),
-                        "code" to error.code,
+                        "errorCode" to error.errorCode,
                         "description" to (error.description?.toString() ?: ""),
                     ),
                 )

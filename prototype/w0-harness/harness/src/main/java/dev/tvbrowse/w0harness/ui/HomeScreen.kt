@@ -40,7 +40,7 @@ import dev.tvbrowse.w0harness.util.jsonObject
  * every other screen including "Mark step".
  */
 @Composable
-fun HomeScreen(activity: android.content.Context, settings: SettingsStore) {
+fun HomeScreen(activity: android.app.Activity, settings: SettingsStore) {
     var urlInput by rememberSaveable { mutableStateOf("") }
     var inputError by rememberSaveable { mutableStateOf("") }
     var showMarkDialog by rememberSaveable { mutableStateOf(false) }

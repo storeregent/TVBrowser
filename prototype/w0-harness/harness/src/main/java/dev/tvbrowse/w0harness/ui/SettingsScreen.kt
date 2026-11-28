@@ -32,7 +32,7 @@ import dev.tvbrowse.w0harness.web.WebViewPool
  * session header through SettingsStore.snapshot().
  */
 @Composable
-fun SettingsScreen(activity: android.content.Context, settings: SettingsStore, pool: WebViewPool) {
+fun SettingsScreen(activity: android.app.Activity, settings: SettingsStore, pool: WebViewPool) {
     var variantUnlocked by remember { mutableStateOf(settings.activityVariant() == SettingsStore.VARIANT_UNLOCKED) }
     var safeBrowsing by remember { mutableStateOf(settings.safeBrowsingEnabled()) }
     var desktopUa by remember { mutableStateOf(settings.desktopUserAgent()) }
