@@ -143,8 +143,26 @@ jobs:
 
       - name: Install TV system image (API 34)
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-34;android-tv;x86_64" > /dev/null
+          set -o pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null | grep -iE "system-images;android-3[0-9];android-tv" | head -20 | tee tv-images-available.txt || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-34;android-tv;x86_64" 2>&1 | tee sdkmanager-install.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Report sdkmanager failure (diagnostics)
+        if: failure()
+        run: |
+          {
+            echo '### sdkmanager diagnostics'
+            echo '```text'
+            tail -n 60 sdkmanager-install.log 2>/dev/null || true
+            echo '--- available TV images ---'
+            cat tv-images-available.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 40 sdkmanager-install.log 2>/dev/null | head -n 6 | while IFS= read -r line; do
+            echo "::error::${line:0:950}"
+          done
 
       - name: Create AVD
         run: |
