@@ -97,9 +97,9 @@ jobs:
           {
             grep -E "^e: file:" "$LOG" 2>/dev/null | head -n 6
             grep -E "FAILURE:|What went wrong" "$LOG" 2>/dev/null | head -n 2
+            grep -A 14 "What went wrong" "$LOG" 2>/dev/null | head -n 14
             grep -E "^> .*(error|failed|Failed|Error)" "$LOG" 2>/dev/null | head -n 6
-            grep -E "> [a-zA-Z].*FAILED$|AssertionError|IllegalStateException|NullPointerException" "$LOG" 2>/dev/null | head -n 4
-          } | head -n 16 | while IFS= read -r line; do
+          } | head -n 24 | while IFS= read -r line; do
             echo "::error::${line:0:950}"
           done
 
