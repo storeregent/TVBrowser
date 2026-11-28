@@ -11,6 +11,9 @@ Maintained by the Lead Orchestrator. Each entry records **what the founder decid
 | F-H2 | Harness UI technology: **Compose for TV + System WebView** | 2026-11-27 | Founder chat | Also exercises the Compose↔WebView focus risk (R-11) |
 | F-H3 | APKs built by **GitHub Actions**; debug artifacts only | 2026-11-27 | Founder chat | Partially covers F-28 (CI platform) for the harness only; production CI is still open |
 | F-H4 | Founder's test devices: **Google TV / Android TV** | 2026-11-27 | Founder chat | Exact models, RAM and Android version still pending (H-IN-1) |
+| F-H4a | First test device: **Haier MatrixTV CE (HRT56EU)**, Android 14 / API 34, 32-bit userspace, 1.4 GB RAM (not low-RAM), WebView 157, **Bluetooth remote** | 2026-11-28 | Founder device reports + founder chat (remote type: "Bluetooth / voice remote") | Multiprocess WebView, so R-02 is not reproducible on this device (F-05 still open). Cannot show the Android 16 Back behaviour |
+| — | Harness PRs **#7 (M1)** and **#8 (M1 checklist + M1.1 brief)** merged | 2026-11-28 | GitHub merge history | M1.1 = PR #9 |
+| F-H5 | **Benchmark build approved**: a non-debuggable, R8-on, profileable `benchmark` build type (suffix `.bench`, CI debug key) for representative cold-start/T-18 numbers. Amends HARNESS_BRIEF §7 "No release builds" for this build type only | 2026-11-28 | Founder chat (option "Haan, approve") | Still no Play upload or publishing. Spec: `prototype/HARNESS_M1_1_FIX_BRIEF.md` H-6 |
 
 ## Still open, needed soon
 

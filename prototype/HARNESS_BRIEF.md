@@ -249,6 +249,7 @@ The tester presses **Mark step** to insert labelled markers (e.g. "remote asleep
   - If not, use the runner's default debug key and state clearly in the README that **each new CI build must be uninstalled before installing** (signature changes).
   - Never commit a keystore.
 - **No release builds, no Play upload, no publishing steps.**
+- **Amendment (F-H5, 2026-11-28):** one `benchmark` build type is allowed (spec: `HARNESS_M1_1_FIX_BRIEF.md` H-6). It is uploaded as a CI artifact only. Still no Play upload and no publishing.
 
 ---
 
