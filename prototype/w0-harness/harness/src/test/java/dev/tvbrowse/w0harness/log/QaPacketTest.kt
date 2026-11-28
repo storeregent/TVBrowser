@@ -1,5 +1,6 @@
 package dev.tvbrowse.w0harness.log
 
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,6 +61,10 @@ class QaPacketTest {
 
     @Test
     fun `nullable webview version code is tolerated`() {
-        assertEquals("null", packet(emptyMap())["webView"].toString().substringAfter("versionCode=").substringBefore(","))
+        val header = packet(emptyMap())
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(header.toString())
+        val webView = parsed.jsonObject["webView"]!!.jsonObject
+        assertTrue("versionCode" in webView.keys)
+        assertTrue(webView["versionCode"] is kotlinx.serialization.json.JsonNull)
     }
 }

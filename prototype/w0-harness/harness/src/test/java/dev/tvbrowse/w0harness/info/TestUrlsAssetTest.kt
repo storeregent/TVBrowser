@@ -13,10 +13,17 @@ class TestUrlsAssetTest {
 
     private fun locateAsset(): File {
         var dir: File? = File(System.getProperty("user.dir")!!).absoluteFile
-        repeat(6) {
-            val candidate = File(dir!!, "src/main/assets/test-urls.json")
-            if (candidate.exists()) return candidate
-            dir = dir!!.parentFile
+        repeat(8) {
+            // Works whether the unit-test working directory is the module dir,
+            // the Gradle root, or the repository root.
+            for (candidate in listOf(
+                File(dir!!, "src/main/assets/test-urls.json"),
+                File(dir!!, "harness/src/main/assets/test-urls.json"),
+                File(dir!!, "prototype/w0-harness/harness/src/main/assets/test-urls.json"),
+            )) {
+                if (candidate.exists()) return candidate
+            }
+            dir = dir!!.parentFile ?: break
         }
         throw IllegalStateException("test-urls.json not found from ${System.getProperty("user.dir")}")
     }

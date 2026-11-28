@@ -89,9 +89,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # Emit key failure lines as ::error:: annotations (readable via the API).
           {
-            grep -E "^e: file:" "$LOG" 2>/dev/null | head -n 8
-            grep -E "FAILURE:|What went wrong|> Task .* FAILED" "$LOG" 2>/dev/null | head -n 2
-          } | head -n 10 | while IFS= read -r line; do
+            grep -E "^e: file:" "$LOG" 2>/dev/null | head -n 6
+            grep -E "FAILURE:|What went wrong" "$LOG" 2>/dev/null | head -n 2
+            grep -E "> [a-zA-Z].*FAILED$|AssertionError|IllegalStateException|NullPointerException" "$LOG" 2>/dev/null | head -n 4
+          } | head -n 12 | while IFS= read -r line; do
             echo "::error::${line:0:950}"
           done
 
