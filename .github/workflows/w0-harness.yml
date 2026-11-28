@@ -146,8 +146,9 @@ jobs:
           set -o pipefail
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null | grep -iE "system-images;android-3[0-9];android-tv" | head -20 | tee tv-images-available.txt || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-34;android-tv;x86_64" 2>&1 | tee sdkmanager-install.log
-          exit ${PIPESTATUS[0]}
+          # API 34 TV images ship as 32-bit x86 (see e.g. android-tv CI setups).
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-34;android-tv;x86" 2>&1 | tee sdkmanager-install.log
+          test -d "$ANDROID_HOME/system-images/android-34/android-tv/x86"
 
       - name: Report sdkmanager failure (diagnostics)
         if: failure()
@@ -167,9 +168,9 @@ jobs:
       - name: Create AVD
         run: |
           AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-          echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86_64" -d tv_1080p \
-            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86_64" \
-            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86_64" -d pixel
+          echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d tv_1080p \
+            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" \
+            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d pixel
 
       - name: Boot emulator (background)
         run: |
