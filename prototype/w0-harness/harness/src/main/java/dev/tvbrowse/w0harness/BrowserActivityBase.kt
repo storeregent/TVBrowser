@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.hardware.display.DisplayManager
 import android.hardware.input.InputManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.InputDevice
@@ -21,6 +22,7 @@ import dev.tvbrowse.w0harness.log.SessionLog
 import dev.tvbrowse.w0harness.ui.HarnessRoot
 import dev.tvbrowse.w0harness.util.ConfigurationDiff
 import dev.tvbrowse.w0harness.util.jsonObject
+import dev.tvbrowse.w0harness.web.WebViewPool
 
 /**
  * Shared browser activity implementation (brief §3.2). The two concrete classes
@@ -166,9 +168,16 @@ abstract class BrowserActivityBase : ComponentActivity() {
                 "repeat" to event.repeatCount,
                 "deviceId" to event.deviceId,
                 "source" to event.source,
-                "longPress" to (event.flags and KeyEvent.FLAG_LONG_PRESS) != 0,
+                "longPress" to ((event.flags and KeyEvent.FLAG_LONG_PRESS) != 0),
             ),
         )
+    }
+
+    private fun actionName(action: Int): String = when (action) {
+        KeyEvent.ACTION_DOWN -> "DOWN"
+        KeyEvent.ACTION_UP -> "UP"
+        KeyEvent.ACTION_MULTIPLE -> "MULTIPLE"
+        else -> action.toString()
     }
 
     private fun toggleHud(trigger: String) {
