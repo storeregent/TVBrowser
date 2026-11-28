@@ -168,9 +168,15 @@ jobs:
       - name: Create AVD
         run: |
           AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-          echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d tv_1080p \
-            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" \
-            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d pixel
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          # Keep avdmanager and the emulator on the same AVD home (the emulator
+          # searches $ANDROID_AVD_HOME first).
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d tv_1080p -p "$ANDROID_AVD_HOME/tv34" \
+            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -p "$ANDROID_AVD_HOME/tv34" \
+            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d pixel -p "$ANDROID_AVD_HOME/tv34"
+          ls -la "$ANDROID_AVD_HOME"
 
       - name: Boot emulator (background)
         run: |
