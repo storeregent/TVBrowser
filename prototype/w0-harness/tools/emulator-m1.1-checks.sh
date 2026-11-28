@@ -128,10 +128,13 @@ navigate_to_url_entry() { # from initial focus: UP -> button row, LEFT x4 -> Dev
 
 fresh_launch() {
   adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
-  sleep 2
-  # M2: the persisted tab state would raise a session-restore offer on these
-  # launches; these checks always want a clean Home.
+  sleep 1
+  # M2: wipe ALL app data so no persisted tab state can raise a session-restore
+  # offer mid-check (T-12 covers the offer explicitly in the M2 script).
+  adb shell pm clear "$PKG" >/dev/null 2>&1 || true
   adb shell rm -f "/sdcard/Android/data/$PKG/files/tabs-state.json" >/dev/null 2>&1 || true
+  sleep 1
+  adb logcat -c >/dev/null 2>&1 || true
   adb shell am start -n "$ACTIVITY" >/dev/null 2>&1 || true
   wait_boot_or_app
 }
@@ -303,10 +306,7 @@ grep -q '"variant":"unlocked"' "$OUT/a5-hook-unlocked.txt"
 check "A5" "am start --ez w0h.locked false -> Unlocked variant used" $?
 
 # ================================================================= A6: StrictMode / no main-thread file I/O in SessionLog
-adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
-sleep 2
-adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -n "$ACTIVITY" >/dev/null 2>&1 || true
+fresh_launch || true
 sleep 10
 adb shell input keyevent 20 >/dev/null 2>&1 || true
 sleep 2

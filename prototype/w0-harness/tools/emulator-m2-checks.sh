@@ -84,6 +84,9 @@ STATE="/sdcard/Android/data/$PKG/files/tabs-state.json"
 reset_state() {
   adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
   sleep 1
+  # pm clear wipes app data (settings + persisted tab state + exit marker) so
+  # every scenario starts deterministic; T-12 re-creates the state on purpose.
+  adb shell pm clear "$PKG" >/dev/null 2>&1 || true
   adb shell rm -f "$STATE" >/dev/null 2>&1 || true
 }
 

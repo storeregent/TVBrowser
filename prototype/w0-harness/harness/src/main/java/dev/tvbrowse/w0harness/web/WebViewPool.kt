@@ -634,8 +634,9 @@ class WebViewPool(private val activity: Activity, private val settings: Settings
 
     /**
      * Offers a stored session on Home (§5.5) when [allowOffer] holds (unclean
-     * previous exit, no adb hooks steering this launch). The file read runs on
-     * the LogIo thread (D-4).
+     * previous exit, no adb hooks steering this launch) AND the saved state
+     * comes from a DIFFERENT process (a same-process state is not a "session
+     * restore"). The file read runs on the LogIo thread (D-4).
      */
     fun offerRestoreAsync(allowOffer: () -> Boolean) {
         dev.tvbrowse.w0harness.log.LogIo.execute {
@@ -643,7 +644,11 @@ class WebViewPool(private val activity: Activity, private val settings: Settings
             activity.runOnUiThread {
                 if (loaded == null) return@runOnUiThread
                 if (!allowOffer()) {
-                    SessionLog.log("RESTORE_OFFER_SUPPRESSED", jsonObject("reason" to "adb launch hook active"))
+                    SessionLog.log("RESTORE_OFFER_SUPPRESSED", jsonObject("reason" to "launch gate"))
+                    return@runOnUiThread
+                }
+                if (loaded.savedPid == android.os.Process.myPid()) {
+                    SessionLog.log("RESTORE_OFFER_SUPPRESSED", jsonObject("reason" to "saved by this process"))
                     return@runOnUiThread
                 }
                 AppState.restoreOffer = AppState.RestoreOffer(
@@ -653,7 +658,12 @@ class WebViewPool(private val activity: Activity, private val settings: Settings
                 )
                 SessionLog.log(
                     "RESTORE_OFFERED",
-                    jsonObject("tabCount" to loaded.tabCount, "activeUrl" to loaded.activeUrl, "savedAtMs" to loaded.savedAtMs),
+                    jsonObject(
+                        "tabCount" to loaded.tabCount,
+                        "activeUrl" to loaded.activeUrl,
+                        "savedAtMs" to loaded.savedAtMs,
+                        "savedPid" to loaded.savedPid,
+                    ),
                 )
             }
         }

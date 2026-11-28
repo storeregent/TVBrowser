@@ -19,17 +19,25 @@ class TabPersistence(context: Context) {
     private val dir: File = context.getExternalFilesDir(null) ?: context.filesDir
     private val file: File = File(dir, FILE_NAME)
 
-    data class Loaded(val payload: String, val tabCount: Int, val activeUrl: String?, val savedAtMs: Long)
+    data class Loaded(
+        val payload: String,
+        val tabCount: Int,
+        val activeUrl: String?,
+        val savedAtMs: Long,
+        val savedPid: Int,
+    )
 
     fun saveAsync(manager: TabManager, trigger: String) {
         val payload = manager.toJson()
         val savedAt = System.currentTimeMillis()
+        val pid = android.os.Process.myPid()
         LogIo.execute {
             runCatching {
                 file.parentFile?.mkdirs()
                 file.writeText(
                     jsonObject(
                         "savedAtMs" to savedAt,
+                        "savedPid" to pid,
                         "trigger" to trigger,
                         "payload" to payload,
                     ).toString(),
@@ -48,12 +56,14 @@ class TabPersistence(context: Context) {
             Json.decodeFromString(TabManager.Snapshot.serializer(), payload)
         }.getOrNull() ?: return null
         val savedAtMs = parsed["savedAtMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+        val savedPid = parsed["savedPid"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         return Loaded(
             payload = payload,
             tabCount = snapshot.tabs.size,
             activeUrl = snapshot.tabs.firstOrNull { it.id == snapshot.activeId }?.currentUrl
                 ?: snapshot.tabs.lastOrNull()?.currentUrl,
             savedAtMs = savedAtMs,
+            savedPid = savedPid,
         )
     }
 

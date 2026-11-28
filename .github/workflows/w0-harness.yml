@@ -176,49 +176,15 @@ jobs:
         if: failure()
         working-directory: prototype/w0-harness
         run: |
-          if [ -f acceptance-out/SUMMARY.md ]; then
-            grep -E "FAIL" acceptance-out/SUMMARY.md | cut -c1-300 | head -5 | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-          fi
-          S=""
-          for f in a5-hook-url.txt a5-screen-logcat.txt a5-hook-export-info.txt a5-hook-export-all.txt a5-hook-mark.txt a5-hook-unlocked.txt a3-logcat.txt a3-down-logcat.txt a7-back.txt; do
-            if [ -f "acceptance-out/$f" ]; then
-              M="$(grep -oE "NAV_REQUEST|ADB_SCREEN_OPENED|DEVICE_INFO_EXPORTED|EXPORT_ALL|MARK|LOAD_URL|url_edit_exit|ADB_HOOKS" "acceptance-out/$f" | sort | uniq -c | awk '{printf "%s:%s ", $2, $1}')"
-              S="$S [$f]${M:-none}"
-            else
-              S="$S [$f]MISSING"
-            fi
-          done
-          echo "::error::log-markers:$S"
-          S2=""
-          for f in b1-tab-open.txt b2-tab-switch.txt b3-crash.txt b4-terminate.txt b5-crash-guard.txt b6-standby.txt b6-mru-live.txt b6-none.txt b7-restored.txt b8-fullscreen.txt b8-fullscreen-hide.txt; do
-            if [ -f "acceptance-out-m2/$f" ]; then
-              M="$(grep -oE "TAB_OPENED|TAB_SWITCH_COMPLETE|RENDER_PROCESS_GONE|RECOVERY_COMPLETE|CRASH_GUARD_TRIPPED|STANDBY_MODE_SET|WEBVIEW_DESTROY|RESTORE_APPLIED|FULLSCREEN_SHOW|FULLSCREEN_HIDE" "acceptance-out-m2/$f" | sort | uniq -c | awk '{printf "%s:%s ", $2, $1}')"
-              S2="$S2 [$f]${M:-none}"
-            else
-              S2="$S2 [$f]MISSING"
-            fi
-          done
-          echo "::error::m2-markers:$S2"
-          if [ -f acceptance-out/a2-focus-traversal.txt ]; then
-            echo "::error::[a2] $(grep -v '^A2' acceptance-out/a2-focus-traversal.txt | tr '\n' ' ' | head -c 600)"
-          fi
-          echo "::error::[m1.1-summary] $(grep -E '^- \[' acceptance-out/SUMMARY.md 2>/dev/null | tr '\n' '|' | head -c 1100)"
-          if [ -f acceptance-out-m2/SUMMARY.md ]; then
-            echo "::error::[m2-summary] $(grep -E '^- \[' acceptance-out-m2/SUMMARY.md | tr '\n' '|' | head -c 1100)"
-          fi
-          for f in a7-am-start.txt a7-back.txt; do
-            [ -f "acceptance-out/$f" ] && echo "::error::[$f] $(tail -c 500 "acceptance-out/$f" | tr '\n' ' ')"
-          done
-          for f in b1-tab-open.txt b3-crash.txt; do
-            [ -f "acceptance-out-m2/$f" ] && echo "::error::[m2-$f] $(tail -c 500 "acceptance-out-m2/$f" | tr '\n' ' ')"
-          done
-          if [ -f acceptance-out-m2/crash-buffer.txt ]; then
-            echo "::error::[m2-crash] $(head -c 500 acceptance-out-m2/crash-buffer.txt | tr '\n' ' ')"
-          fi
-          echo "::error::[restore-grep] m1.1:$(grep -c "RESTORE_OFFER\|RESTORE_DISCARDED" acceptance-out/*.txt 2>/dev/null | tr '\n' ' ') m2:$(grep -c "RESTORE_OFFER\|RESTORE_DISCARDED" acceptance-out-m2/*.txt 2>/dev/null | tr '\n' ' ')"
-          echo "::error::[keyevents-a7] $(grep -c "KEY_EVENT" acceptance-out/a7-back.txt 2>/dev/null) back-keys:$(grep -c "KEYCODE_BACK" acceptance-out/a7-back.txt 2>/dev/null)"
+          M1S="$(grep -E '^- \[' acceptance-out/SUMMARY.md 2>/dev/null | tr '\n' '|' | head -c 1400)"
+          M2S="$(grep -E '^- \[' acceptance-out-m2/SUMMARY.md 2>/dev/null | tr '\n' '|' | head -c 1400)"
+          echo "::error::[M1.1-summary] ${M1S:-MISSING}"
+          echo "::error::[M2-summary] ${M2S:-MISSING}"
+          A7T="[a7] $(tail -c 400 acceptance-out/a7-back.txt 2>/dev/null | tr '\n' ' ')"
+          B1T="[b1] $(tail -c 400 acceptance-out-m2/b1-tab-open.txt 2>/dev/null | tr '\n' ' ')"
+          CR="[m2-crashbuf] $(head -c 400 acceptance-out-m2/crash-buffer.txt 2>/dev/null | tr '\n' ' ')"
+          echo "::error::$A7T $B1T"
+          echo "::error::$CR"
 
       - name: Publish check summary
         if: always()
