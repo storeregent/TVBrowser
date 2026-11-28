@@ -74,7 +74,7 @@ jobs:
       - name: Build (JVM unit tests + both flavor debug APKs)
         run: |
           set -o pipefail
-          ./gradlew --no-daemon testDebugUnitTest assembleStandardDebug assembleAltDebug --stacktrace 2>&1 | tee gradle-output.log
+          ./gradlew --no-daemon testStandardDebugUnitTest testAltDebugUnitTest assembleStandardDebug assembleAltDebug --stacktrace 2>&1 | tee gradle-output.log
 
       - name: Publish gradle output tail to job summary (debug aid)
         if: always()
