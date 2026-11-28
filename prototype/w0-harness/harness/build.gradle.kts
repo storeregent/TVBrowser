@@ -87,8 +87,8 @@ android {
 // AGP 9 new DSL: build info goes in via the variant API (buildConfigField DSL was removed).
 androidComponents {
     onVariants { variant ->
-        variant.buildConfigFields.put("GIT_SHA", BuildConfigField("String", "\"$gitSha\"", null))
-        variant.buildConfigFields.put("BUILD_TIME", BuildConfigField("String", "\"$buildTime\"", null))
+        variant.buildConfigFields?.put("GIT_SHA", BuildConfigField("String", "\"$gitSha\"", null))
+        variant.buildConfigFields?.put("BUILD_TIME", BuildConfigField("String", "\"$buildTime\"", null))
     }
 }
 
