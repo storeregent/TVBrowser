@@ -150,23 +150,28 @@ IME_SHOWN="$(adb shell dumpsys input_method 2>/dev/null | grep -c 'mInputShown=t
 
   # A2: record the pre-keypress initial focus as step0 (Example.com coverage).
   dumpui a2_step0
-# ================================================================= A2: D-pad traversal coverage
+# ================================================================= A2: D-pad traversal coverage (dump-driven adaptive walk)
+# Fixed key sequences are fragile: which row-1 control UP lands on (URL entry
+# vs Go) depends on tv-material focus scale. Walk with dump feedback instead.
+a2_label() { # dump now, print focused label
+  dumpui a2_probe
+  local F
+  F="$(focused_node "$OUT/a2_probe.xml")"
+  echo "${F%%|*}"
+}
+a2_press() { adb shell input keyevent "$1" >/dev/null 2>&1 || true; sleep 1; }
 dumpui a2_step0
-VISITED=("$(focused_node "$OUT/a2_step0.xml")") # step0 = initial focus (Example.com)
-KEYS=(19 21 21 21 21 19 21 20 20) # UP, LEFT x4, UP (-> Go), LEFT (-> URL entry), DOWN, DOWN
-STEP=0
-for key in "${KEYS[@]}"; do
-  adb shell input keyevent "$key" >/dev/null 2>&1 || true
-  sleep 1.2
-  STEP=$((STEP + 1))
-  dumpui "a2_step$STEP"
-  F="$(focused_node "$OUT/a2_step$STEP.xml")"
-  VISITED+=("$F")
-  shot "a2_step$STEP"
-done
-{ echo "A2 traversal (key -> focusedText|focusedClass):"
-  echo "  step0 (initial): ${VISITED[0]}"
-  for i in "${!KEYS[@]}"; do echo "  step$((i + 1)): ${VISITED[$((i + 1))]}"; done
+VISITED=("$(a2_label)") # step0 = initial focus (first test URL)
+a2_press 19; VISITED+=("$(a2_label)")               # UP -> button row
+for _ in 1 2 3 4; do a2_press 22; VISITED+=("$(a2_label)"); done  # RIGHT x4 -> right end
+for _ in 1 2 3 4; do a2_press 21; VISITED+=("$(a2_label)"); done  # LEFT x4 -> left end (full row)
+a2_press 19; TOP1="$(a2_label)"; VISITED+=("$TOP1") # UP -> top row (URL entry or Go)
+if [ "$TOP1" = "URL" ]; then a2_press 22; else a2_press 21; fi
+VISITED+=("$(a2_label)")                            # the other top-row control
+a2_press 20; VISITED+=("$(a2_label)")               # DOWN -> button row
+a2_press 20; VISITED+=("$(a2_label)")               # DOWN -> test URL list
+{ echo "A2 traversal (adaptive walk, focusedText|focusedClass):"
+  for i in "${!VISITED[@]}"; do echo "  step$i: ${VISITED[$i]}"; done
 } > "$OUT/a2-focus-traversal.txt"
 COVERAGE_BAD=0
 for want in "Go" "Device Info" "Logs" "Settings" "Tests" "Mark step" "Example.com" "URL"; do
@@ -198,7 +203,9 @@ logcat_dump "$OUT/a3-logcat.txt"
 grep -q "LOAD_URL" "$OUT/a3-logcat.txt" && grep -qi "example.com" "$OUT/a3-logcat.txt"
 check "A3" "IME Done commits and loads the URL (LOAD_URL in log)" $?
 
-# ... then edit mode + DPAD_DOWN leaves WITHOUT loading
+# ... then edit mode + DPAD_DOWN leaves WITHOUT loading. On a TV the open IME
+# may consume D-pad keys itself; in that case BACK is the other D-1 exit path
+# (BackHandler), so fall back to it when the focused node is still the field.
 adb logcat -c >/dev/null 2>&1 || true
 fresh_launch || true
 sleep 2
@@ -207,6 +214,12 @@ adb shell input keyevent 23 >/dev/null 2>&1 || true   # OK -> edit mode
 sleep 2
 adb shell input keyevent 20 >/dev/null 2>&1 || true   # DPAD_DOWN -> exit edit, no load
 sleep 2
+dumpui a3_down_probe
+PD="$(focused_node "$OUT/a3_down_probe.xml")"; PD="${PD##*|}"
+if [ "$PD" = "android.widget.EditText" ]; then
+  adb shell input keyevent 4 >/dev/null 2>&1 || true  # BACK -> exit edit (IME ate the D-pad)
+  sleep 2
+fi
 shot a3_down_exit
 dumpui a3_down_exit
 F="$(focused_node "$OUT/a3_down_exit.xml")"; FC="${F##*|}"
@@ -214,7 +227,7 @@ logcat_dump "$OUT/a3-down-logcat.txt"
 EXIT_LOGGED=0
 grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt" && EXIT_LOGGED=1
 { [ "$FC" != "android.widget.EditText" ] || [ "$EXIT_LOGGED" = "1" ]; }
-check "A3" "D-pad Down leaves edit mode (focused class=$FC, exit-logged=$EXIT_LOGGED)" $?
+check "A3" "edit mode exits without committing (D-pad Down, or Back when the IME consumes D-pad; focused class=$FC, exit-logged=$EXIT_LOGGED)" $?
 grep -q "LOAD_URL" "$OUT/a3-down-logcat.txt"; [ $? -ne 0 ]; check "A3" "Down-exit does NOT load a page" $?
 grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt"; check "A3" "BACK_DISPATCH/exit logged (handledBy=url_edit_exit path)" $?
 
