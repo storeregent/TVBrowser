@@ -1,6 +1,6 @@
 package dev.tvbrowse.w0harness.log
 
-import java.util.LinkedBlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 

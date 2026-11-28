@@ -24,17 +24,16 @@ class EntryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val store = SettingsStore(this)
-        val adb = AdbExtras.parse(
-            mapOf(
-                AdbExtras.KEY_URL to intent.getStringExtra(AdbExtras.KEY_URL),
-                AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
-                AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
-                AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
-                // `--ez w0h.locked` delivers a Boolean extra; `-e w0h.locked` a String. Accept both.
-                AdbExtras.KEY_LOCKED to intent.getStringExtra(AdbExtras.KEY_LOCKED)
-                    ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString(),
-            ),
+        val extras: Map<String, String?> = mapOf(
+            AdbExtras.KEY_URL to intent.getStringExtra(AdbExtras.KEY_URL),
+            AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
+            AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
+            AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
+            // `--ez w0h.locked` delivers a Boolean extra; `-e w0h.locked` a String. Accept both.
+            AdbExtras.KEY_LOCKED to (intent.getStringExtra(AdbExtras.KEY_LOCKED)
+                ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString()),
         )
+        val adb = AdbExtras.parse(extras)
         if (adb.hasAny) {
             SessionLog.log(
                 "ADB_HOOKS",

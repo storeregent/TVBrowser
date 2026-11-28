@@ -174,16 +174,15 @@ abstract class BrowserActivityBase : ComponentActivity() {
     // ------------------------------------------------------------------ adb launch hooks (D-5)
 
     private fun applyAdbLaunchCommands() {
-        val adb = AdbExtras.parse(
-            mapOf(
-                AdbExtras.KEY_URL to intent.getStringExtra(AdbExtras.KEY_URL),
-                AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
-                AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
-                AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
-                AdbExtras.KEY_LOCKED to intent.getStringExtra(AdbExtras.KEY_LOCKED)
-                    ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString(),
-            ),
+        val extras: Map<String, String?> = mapOf(
+            AdbExtras.KEY_URL to intent.getStringExtra(AdbExtras.KEY_URL),
+            AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
+            AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
+            AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
+            AdbExtras.KEY_LOCKED to (intent.getStringExtra(AdbExtras.KEY_LOCKED)
+                ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString()),
         )
+        val adb = AdbExtras.parse(extras)
         if (!adb.hasAny) return
         SessionLog.log(
             "ADB_HOOKS",
