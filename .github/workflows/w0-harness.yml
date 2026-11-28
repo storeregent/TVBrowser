@@ -92,7 +92,7 @@ jobs:
             grep -E "^e: file:" "$LOG" 2>/dev/null | head -n 8
             grep -E "FAILURE:|What went wrong|> Task .* FAILED" "$LOG" 2>/dev/null | head -n 2
           } | head -n 10 | while IFS= read -r line; do
-            echo "::error::${line:0:1000}"
+            echo "::error::${line:0:950}"
           done
 
       - name: Upload debug APKs as workflow artifact

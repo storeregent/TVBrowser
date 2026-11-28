@@ -139,19 +139,26 @@ object DeviceInfoCollector {
 
     private fun inputDevices(activity: Activity): kotlinx.serialization.json.JsonObject {
         val im = activity.getSystemService(Context.INPUT_SERVICE) as android.hardware.input.InputManager
-        val devices = im.inputDeviceIds.mapNotNull { id -> InputDevice.getDevice(id) }
-        return jsonObject(
-            "count" to devices.size,
-            "devices" to devices.map { d ->
+        val ids: IntArray = im.getInputDeviceIds()
+        val deviceJsons = mutableListOf<kotlinx.serialization.json.JsonObject>()
+        for (id in ids) {
+            val d: InputDevice? = InputDevice.getDevice(id)
+            if (d == null) continue
+            val isExternal: Boolean? = if (Build.VERSION.SDK_INT >= 29) d.isExternal else null
+            deviceJsons.add(
                 jsonObject(
                     "id" to d.id,
                     "name" to d.name,
                     "sources" to sourcesOf(d.sources),
                     "vendorId" to d.vendorId,
                     "productId" to d.productId,
-                    "isExternal" to if (Build.VERSION.SDK_INT >= 29) d.isExternal else null,
-                )
-            },
+                    "isExternal" to isExternal,
+                ),
+            )
+        }
+        return jsonObject(
+            "count" to deviceJsons.size,
+            "devices" to deviceJsons,
         )
     }
 
