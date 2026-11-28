@@ -27,6 +27,7 @@ object TvFocus {
 
     // ---- tv-material Button ----
 
+    @Composable
     fun buttonColors() = ButtonDefaults.colors(
         containerColor = HarnessColors.SurfaceRaised,
         contentColor = HarnessColors.OnSurface,
@@ -38,8 +39,10 @@ object TvFocus {
         disabledContentColor = HarnessColors.MutedText,
     )
 
+    @Composable
     fun buttonScale() = ButtonDefaults.scale(focusedScale = 1.05f)
 
+    @Composable
     fun buttonBorder() = ButtonDefaults.border(
         border = Border(border = BorderStroke(1.dp, HarnessColors.BorderUnfocused)),
         focusedBorder = Border(border = BorderStroke(2.dp, HarnessColors.BorderFocused)),
@@ -47,6 +50,7 @@ object TvFocus {
 
     // ---- clickable Surface (rows, URL entry) ----
 
+    @Composable
     fun surfaceColors() = ClickableSurfaceDefaults.colors(
         containerColor = HarnessColors.SurfaceRaised,
         contentColor = HarnessColors.OnSurface,
@@ -56,8 +60,10 @@ object TvFocus {
         pressedContentColor = HarnessColors.OnFocusContainer,
     )
 
+    @Composable
     fun surfaceScale() = ClickableSurfaceDefaults.scale(focusedScale = 1.05f)
 
+    @Composable
     fun surfaceBorder() = ClickableSurfaceDefaults.border(
         border = Border(border = BorderStroke(1.dp, HarnessColors.BorderUnfocused)),
         focusedBorder = Border(border = BorderStroke(2.dp, HarnessColors.BorderFocused)),
