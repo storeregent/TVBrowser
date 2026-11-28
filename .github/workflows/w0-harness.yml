@@ -167,11 +167,17 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           emulator-boot-timeout: 1200
           script: |
-            adb install -r prototype/w0-harness/harness/build/outputs/apk/standard/debug/harness-standard-debug.apk
-            adb install -r prototype/w0-harness/harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "(alt install failed; standard checks continue)"
-            cd prototype/w0-harness
-            tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
-            tools/emulator-m2-checks.sh dev.tvbrowse.w0harness acceptance-out-m2
+            adb install -r prototype/w0-harness/harness/build/outputs/apk/standard/debug/harness-standard-debug.apk || { echo "::error::install-standard-apk-failed rc=$?"; exit 1; }
+            adb install -r prototype/w0-harness/harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "::error::alt-apk-install-failed (standard checks continue)"
+            cd prototype/w0-harness || { echo "::error::cd-harness-failed"; exit 1; }
+            echo "::notice::install-ok starting-m1.1-checks"
+            RC1=0
+            RC2=0
+            tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out || RC1=$?
+            echo "::notice::m1.1-checks-rc=$RC1 starting-m2-checks"
+            tools/emulator-m2-checks.sh dev.tvbrowse.w0harness acceptance-out-m2 || RC2=$?
+            echo "::notice::m2-checks-rc=$RC2"
+            [ "$RC1" = "0" ] && [ "$RC2" = "0" ] || { echo "::error::acceptance-checks-failed rc1=$RC1 rc2=$RC2"; exit 1; }
 
       - name: Report check failures as annotations
         if: failure()
