@@ -12,13 +12,41 @@
 4. Repeat with USB/Bluetooth mouse connect/disconnect.
 **Pass for FR-14:** 0/10 video drops. **Agar recreate na ho** → A-01 ❌ aur FR-14 ko "defensive only" karke W5 se hatayein / re-scope.
 
-## P2 — Ad-block baseline (A-05, A-26, FR-21)
-**Primary benchmark = d3ward AdBlock Test (%)**; canyoublockit sirf qualitative notes.
+## P2 — Ad-block baseline (A-05, A-26, FR-21) — **PROPOSAL · PENDING FOUNDER APPROVAL**
+> **STATUS (current): BLOCKED.** d3ward AdBlock Test (`d3ward.github.io/toolz/adblock.html`) is archived and returns no score — confirmed across 3 M1 runs on Haier MatrixTV CE (see `reports/W0/logs/M1/Haier_MatrixTV_CE_cb73e80/FOUNDER_REPORT.md` §6, issue **I-2**). **No ad-block % claims are permitted until the founder approves the replacement below.**
+>
+> **Founder conflict to resolve (do NOT edit PRD/TECH_SPEC here):** `PRD_v1.2.md` and `TECH_SPEC_v1.2.md` FR-21 mandate *"ek hi benchmark = d3ward AdBlock Test (%), KPI ≥70%"*. d3ward is dead, so that KPI is currently unmeasurable. Approving a replacement below implies the founder also re-baselines the KPI source. PRD/TECH_SPEC edits are owned by product/tech lead, not QA.
+
+**Proposed PRIMARY benchmark — `https://adblock.turtlecute.org` (Turtlecute33/adblocktest)**
+- **Live?** ✅ Yes — repo active (latest commit 13 Nov 2026; README updated Aug 2026). Served from `adblock.turtlecute.org` (GitHub Pages / Cloudflare).
+- **Numeric score?** ✅ Yes — one-click test returns a **percentage** ("percentage of connections blocked") with a liquid score ball + color bands (red/amber/green). Three categories: Cosmetic Filter, Script Loading, Host — same shape as d3ward.
+- **Android TV WebView compatibility?** ⚠️ **UNVERIFIED.** We have **not** executed this page in an Android TV WebView, so we cannot assert it renders and scores correctly on a TV WebView (WebView 157 / low-RAM device). It is a pure client-side static page whose score is derived from whether probe connections / script loads are blocked (d3ward's exact mechanism) and requires JS enabled; this *should* work, but TV-WebView rendering of the score UI is **UNVERIFIED** until a real run is performed. Requires JS on and connection-failure detection (no aggressive safe-browsing interference). Same plain-WebView reference flow already used in M1.
+- **License / terms:** Source `github.com/Turtlecute33/adblocktest` is a **fork of `d3ward/toolz`** (177 commits ahead of `d3ward:toolz:master`). **Licensed CC BY-NC-SA 4.0** (same as upstream d3ward). Free + open-source. No ToS page imposes usage restrictions beyond the CC license; results are computed locally, nothing is uploaded. Minor monetization: a static "sponsorship" box only (run-time ad creatives removed in the Nov 2026 cleanup).
+- **Usage scope (important):** this benchmark is a **test/validation target only**. **Do NOT bundle Turtlecute/d3ward lists or code in the TVBrowser product.** We measure against the live test page; we do not vendor its filter lists or scripts. (CC BY-NC-SA is non-commercial — bundling into a commercial product is out of scope regardless.)
+- **Why primary:** it *is* d3ward's test, kept online — lowest-friction, highest-faithfulness replacement; preserves the "one numeric % per run" format the plan/PRD expect.
+
+**Qualitative only (NOT a score source):** `canyoublockit.com` — live Simple / eXtreme / Advanced suites, but qualitative pass-fail, no single numeric %. Retained only as a complementary qualitative check per FR-21; no % is claimed from it.
+
+**Rejected / not proposed (for the record):**
+- `adblocktester.pages.dev` (KristopherKubicki/adblock-tester) — **DROPPED as secondary: unverified provenance and licence.** An earlier draft proposed it; removed pending founder/lead confirmation of its MIT claim and independent origin. Not used.
+- `adblock-tester.com` (the /100 site, "v3.1.1", 11 services/22 checks) — live & numeric, **but affiliate-monetized (Total Adblock referral links)** → undisclosed commercial bias; not suitable as a neutral QA benchmark. (Its ToS at adblock-testers.com states results are "informational only, not a measure of effectiveness.")
+- `blockads.fivefilters.org` — live but **boolean** (blocking enabled / partial / none), no numeric %.
+- `d3ward.github.io` — **archived / dead**, no score. (The reason for this proposal.)
+
+**Proposed protocol (mechanics unchanged from prior P2; swap the URL to `https://adblock.turtlecute.org`):**
 1. Same device, same network, desktop UA, JS on, whitelist off, fresh profile.
-2. Apps: BrowseHere, TV Bro (current Play/GitHub build), aur ek plain WebView reference.
-3. **3 runs each**; score + screenshot + variance log.
-4. Note: kis test category me fail hua (network / cosmetic / popup / first-party).
-**Record:** BrowseHere ___/___/___ · TV Bro ___/___/___ · variance ___. **Koi "95%" claim nahi.**
+2. **Network control (plain-WebView reference):** on the device, set **Private DNS = OFF** so the measurement isolates *browser-level* blocking and is not skewed by device/network DNS filtering. Document the Wi-Fi / DNS provider used each run.
+3. Apps: BrowseHere, TV Bro (pinned Play/GitHub build versions), + one plain WebView reference (harness blocklist **OFF** = plain-WebView reference, per `prototype/HARNESS_BRIEF.md` §5.7).
+4. **3 runs each** on `https://adblock.turtlecute.org`; record score + screenshot + variance log.
+5. **Per run, record the upstream commit SHA** the benchmark is built from (the `d3ward/toolz` commit the fork is currently based on) so each result is tied to a known, reproducible benchmark version.
+6. Note failing categories (network / cosmetic / popup / first-party / per-service) from the site's own breakdown.
+7. Raw logs + screenshots → `W0/logs/` (evidence root, F-12); path in `validation-results.md` Section B.
+
+**Open validity question (flag for founder/lead — do NOT resolve in this PR):**
+- **`shouldInterceptRequest` / empty-200 caveat.** TVBrowser (and some TV browsers) block via `WebViewClient.shouldInterceptRequest`, which can return an *empty 200 response* instead of letting the request fail. The benchmark detects "Blocked" only when the connection actually fails; with an empty-200 shim the request *succeeds*, so the page may report those items as **Not Blocked** even though the ad was suppressed. This could *understate* the true block rate and make cross-app comparison invalid. Decision needed: does the benchmark's failure-detection work against our interception method, or should we add a probe that distinguishes an empty-200 shim from a real block? **UNRESOLVED.**
+
+**Record:** BrowseHere ___/___/___ · TV Bro ___/___/___ · plain-WebView ___/___/___ · variance ___ · upstream-SHA ___. **Koi "95%" claim nahi** until founder approves and a real measured baseline exists.
+**Founder decision required:** (a) approve PRIMARY `https://adblock.turtlecute.org` (CC BY-NC-SA, non-commercial — confirm product use is limited to external testing only, no bundling); (b) re-baseline the ≥70% KPI source in PRD/TECH_SPEC (out of QA scope); (c) confirm whether the plain-WebView reference or the app builds is the headline number; (d) resolve the `shouldInterceptRequest`/empty-200 validity question.
 
 ## P3 — 30-min scripted LMK session (NFR-01, NFR-06, FR-12)
 **Devices:** 1GB device + 2GB baseline. Capture `dumpsys meminfo <pkg>` (ALL PIDs incl. `:webview`/renderer) + `gfxinfo` + `logcat ActivityManager`.
