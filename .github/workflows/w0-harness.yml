@@ -180,17 +180,18 @@ jobs:
 
       - name: Boot emulator (background)
         run: |
+          adb start-server || true
           "$ANDROID_HOME/emulator/emulator" -avd tv34 \
             -no-window -no-audio -gpu swiftshader_indirect -no-boot-anim -accel on \
-            -no-snapshot -wipe-data > emulator-boot.log 2>&1 &
+            -no-snapshot -wipe-data -no-metrics > emulator-boot.log 2>&1 &
 
       - name: Wait for boot
         run: |
           adb wait-for-device || true
-          for i in $(seq 1 120); do
+          for i in $(seq 1 240); do
             BOOTED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
             if [ "$BOOTED" = "1" ]; then echo "boot completed after ~$((i * 5))s"; exit 0; fi
-            if [ $((i % 12)) = "0" ]; then echo "still booting (${BOOTED:-no answer}) ..."; fi
+            if [ $((i % 24)) = "0" ]; then echo "still booting (${BOOTED:-no answer}) ..."; fi
             sleep 5
           done
           {
