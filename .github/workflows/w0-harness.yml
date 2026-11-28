@@ -180,13 +180,25 @@ jobs:
 
       - name: Wait for boot
         run: |
-          adb wait-for-device
-          for i in $(seq 1 90); do
-            BOOTED="$(adb shell getprop sys.boot_completed | tr -d '\r')"
-            if [ "$BOOTED" = "1" ]; then echo "boot completed"; exit 0; fi
+          adb wait-for-device || true
+          for i in $(seq 1 120); do
+            BOOTED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            if [ "$BOOTED" = "1" ]; then echo "boot completed after ~$((i * 5))s"; exit 0; fi
+            if [ $((i % 12)) = "0" ]; then echo "still booting (${BOOTED:-no answer}) ..."; fi
             sleep 5
           done
-          echo "emulator did not finish booting"; tail -n 100 emulator-boot.log; exit 1
+          {
+            echo '### Emulator boot diagnostics'
+            echo '```text'
+            echo '--- adb devices ---'; adb devices -l 2>&1 || true
+            echo '--- emulator-boot.log tail ---'
+            tail -n 80 emulator-boot.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 30 emulator-boot.log 2>/dev/null | tail -n 6 | while IFS= read -r line; do
+            echo "::error::boot: ${line:0:950}"
+          done
+          exit 1
 
       - name: Install APKs
         run: |
