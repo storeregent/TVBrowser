@@ -118,6 +118,10 @@ fun HomeScreen(activity: android.app.Activity, settings: SettingsStore) {
     fun exitEditWithoutCommit() {
         editing = false
         ime?.hide()
+        SessionLog.log(
+            "BACK_DISPATCH",
+            jsonObject("screen" to "Home", "canGoBack" to (urlInput.isNotBlank()), "handledBy" to "url_edit_exit", "loaded" to false),
+        )
         goFocus.requestFocus()
     }
 

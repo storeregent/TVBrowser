@@ -41,7 +41,9 @@ dumpui() { # dumpui <name>
   adb pull /sdcard/ui.xml "$OUT/$1.xml" >/dev/null 2>&1 || true
 }
 
-# Prints "focusedText|focusedClass" (empty if no focused node found).
+# Prints "label|focusedClass". `label` is the focused node's own text (or
+# content-desc); uiautomator dumps of Compose TV surfaces often carry the text
+# on a CHILD node, so fall back to the first labeled descendant.
 focused_node() {
   python3 - "$1" <<'PY' 2>/dev/null || echo "|"
 import sys
@@ -50,12 +52,49 @@ try:
     tree = ET.parse(sys.argv[1])
 except Exception:
     print("|"); raise SystemExit
+target = None
 for node in tree.iter('node'):
     if node.get('focused') == 'true':
-        text = (node.get('text') or node.get('content-desc') or '').strip()
-        print(f"{text}|{node.get('class') or ''}")
-        raise SystemExit
-print("|")
+        target = node
+        break
+if target is None:
+    print("|"); raise SystemExit
+def label(e):
+    return (e.get('text') or e.get('content-desc') or '').strip()
+text = label(target)
+cls = target.get('class') or ''
+if not text:
+    for d in target.iter('node'):
+        if d is target:
+            continue
+        t = label(d)
+        if t:
+            text = t
+            break
+print(f"{text}|{cls}")
+PY
+}
+
+# "yes" if the focused node or any of its descendants is an EditText.
+focused_edittext() {
+  python3 - "$1" <<'PY' 2>/dev/null || echo no
+import sys
+import xml.etree.ElementTree as ET
+try:
+    tree = ET.parse(sys.argv[1])
+except Exception:
+    print("no"); raise SystemExit
+target = None
+for node in tree.iter('node'):
+    if node.get('focused') == 'true':
+        target = node
+        break
+if target is None:
+    print("no"); raise SystemExit
+for e in target.iter('node'):
+    if (e.get('class') or '').endswith('EditText'):
+        print("yes"); raise SystemExit
+print("no")
 PY
 }
 
@@ -70,13 +109,17 @@ wait_boot_or_app() { # wait until our UI text appears
   return 1
 }
 
-navigate_to_url_entry() { # from initial focus: UP -> button row, LEFT x4 -> Device Info, UP -> URL entry
+navigate_to_url_entry() { # from initial focus: UP -> button row, LEFT x4 -> Device Info, UP -> top row (URL entry or Go); fix left if we landed on Go
   adb shell input keyevent 19; sleep 1
   adb shell input keyevent 21; sleep 1
   adb shell input keyevent 21; sleep 1
   adb shell input keyevent 21; sleep 1
   adb shell input keyevent 21; sleep 1
   adb shell input keyevent 19; sleep 1.5
+  dumpui nav_probe
+  local L
+  L="$(focused_node "$OUT/nav_probe.xml")"; L="${L%%|*}"
+  if [ "$L" = "Go" ]; then adb shell input keyevent 21; sleep 1.5; fi
 }
 
 fresh_launch() {
@@ -122,7 +165,7 @@ done
   for i in "${!KEYS[@]}"; do echo "  step$((i + 1)): ${VISITED[$((i + 1))]}"; done
 } > "$OUT/a2-focus-traversal.txt"
 COVERAGE_BAD=0
-for want in "Go" "Device Info" "Logs" "Settings" "Tests" "Mark step" "Example.com"; do
+for want in "Go" "Device Info" "Logs" "Settings" "Tests" "Mark step" "Example.com" "Press OK to type"; do
   grep -q "$want" "$OUT/a2-focus-traversal.txt" || { COVERAGE_BAD=1; note "   (A2: '$want' never focused)"; }
 done
 grep -q "EditText" "$OUT/a2-focus-traversal.txt"; [ $? -ne 0 ]; check "A2" "D-pad reaches every Home element, never traps in a text field" $?
@@ -139,7 +182,9 @@ sleep 2
 shot a3_edit_mode
 dumpui a3_edit_mode
 F="$(focused_node "$OUT/a3_edit_mode.xml")"; FC="${F##*|}"
-[ "$FC" = "android.widget.EditText" ]; check "A3" "OK on URL entry switches to edit mode (focused class=$FC)" $?
+ET="$(focused_edittext "$OUT/a3_edit_mode.xml")"
+{ [ "$FC" = "android.widget.EditText" ] || [ "$ET" = "yes" ]; }
+check "A3" "OK on URL entry switches to edit mode (focused: $F)" $?
 adb shell input text "example.com" >/dev/null 2>&1 || true
 sleep 1
 adb shell input keyevent 66 >/dev/null 2>&1 || true   # ENTER = IME Done -> commit
@@ -167,13 +212,17 @@ grep -q "LOAD_URL" "$OUT/a3-down-logcat.txt"; [ $? -ne 0 ]; check "A3" "Down-exi
 grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt"; check "A3" "BACK_DISPATCH/exit logged (handledBy=url_edit_exit path)" $?
 
 # ================================================================= A5: adb hooks
+# Each hook is delivered via a cold start: `am start` on the live task would
+# just bring it to the front without delivering a new intent.
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true; sleep 2
 adb logcat -c >/dev/null 2>&1 || true
 adb shell am start -n "$ACTIVITY" -e w0h.url "https://example.com/" >/dev/null 2>&1 || true
 sleep 8
 logcat_dump "$OUT/a5-hook-url.txt"
-grep -q "NAV_REQUEST" "$OUT/a5-hook-url.txt" && grep -q "adb" "$OUT/a5-hook-url.txt"
+grep -q "NAV_REQUEST" "$OUT/a5-hook-url.txt" && grep -q '"source":"adb"' "$OUT/a5-hook-url.txt"
 check "A5" "am start -e w0h.url -> NAV_REQUEST (source=adb)" $?
 
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true; sleep 2
 adb shell am start -n "$ACTIVITY" -e w0h.screen tests >/dev/null 2>&1 || true
 sleep 3
 dumpui a5_screen_tests
@@ -181,18 +230,21 @@ logcat_dump "$OUT/a5-screen-logcat.txt"
 grep -q "ADB_SCREEN_OPENED" "$OUT/a5-screen-logcat.txt" && grep -q '"screen":"Tests"' "$OUT/a5-screen-logcat.txt"
 check "A5" "am start -e w0h.screen tests -> Tests screen (ADB_SCREEN_OPENED)" $?
 
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true; sleep 2
 adb shell am start -n "$ACTIVITY" -e w0h.action export_deviceinfo >/dev/null 2>&1 || true
 sleep 8
 logcat_dump "$OUT/a5-hook-export-info.txt"
 grep -q "DEVICE_INFO_EXPORTED" "$OUT/a5-hook-export-info.txt"
 check "A5" "am start -e w0h.action export_deviceinfo -> DEVICE_INFO_EXPORTED" $?
 
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true; sleep 2
 adb shell am start -n "$ACTIVITY" -e w0h.action export_all >/dev/null 2>&1 || true
 sleep 8
 logcat_dump "$OUT/a5-hook-export-all.txt"
 grep -q "EXPORT_ALL" "$OUT/a5-hook-export-all.txt"
 check "A5" "am start -e w0h.action export_all -> EXPORT_ALL" $?
 
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true; sleep 2
 adb shell am start -n "$ACTIVITY" -e w0h.action mark_step -e w0h.label ADB_MARK_TEST >/dev/null 2>&1 || true
 sleep 4
 logcat_dump "$OUT/a5-hook-mark.txt"

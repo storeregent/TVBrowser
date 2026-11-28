@@ -160,19 +160,14 @@ jobs:
         if: failure()
         working-directory: prototype/w0-harness
         run: |
-          if [ -f acceptance-out/SUMMARY.md ]; then
-            grep -nE "FAIL|ERROR|BLOCKED" acceptance-out/SUMMARY.md | cut -c1-500 | head -8 | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-          fi
-          for f in a2-focus-traversal.txt a5-hook-url.txt a5-hook-export-info.txt a3-logcat.txt; do
+          for f in a2-focus-traversal.txt a5-hook-url.txt a5-screen-logcat.txt a5-hook-export-info.txt a3-logcat.txt; do
             if [ -f "acceptance-out/$f" ]; then
-              echo "::error::[$f] $(head -c 800 "acceptance-out/$f" | tr '\n' ' ')"
+              echo "::error::[$f] $(head -c 750 "acceptance-out/$f" | tr '\n' ' ')"
             else
               echo "::error::[$f] MISSING"
             fi
           done
-          for x in a3_before_ok a3_edit_mode; do
+          for x in a3_before_ok nav_probe a3_edit_mode; do
             if [ -f "acceptance-out/$x.xml" ]; then
               echo "::error::[$x] $(python3 - "acceptance-out/$x.xml" <<'PY' 2>/dev/null
           import sys, xml.etree.ElementTree as ET
@@ -183,7 +178,15 @@ jobs:
           n = [e for e in tree.iter('node') if e.get('focused') == 'true']
           if n:
               e = n[0]
-              print("focused:", (e.get('text') or e.get('content-desc') or ''), e.get('class'))
+              t = (e.get('text') or e.get('content-desc') or '').strip()
+              if not t:
+                  for d in e.iter('node'):
+                      if d is e:
+                          continue
+                      t = (d.get('text') or d.get('content-desc') or '').strip()
+                      if t:
+                          break
+              print("focused:", repr(t), e.get('class'))
           else:
               print("no focused node")
           PY
@@ -191,7 +194,7 @@ jobs:
             fi
           done
           if [ -f acceptance-out/crash-buffer.txt ]; then
-            grep -m1 -A 6 "FATAL" acceptance-out/crash-buffer.txt | head -c 900 | tr '\n' ' ' | { IFS= read -r l; echo "::error::[crash] $l"; } || true
+            grep -m1 -A 5 "FATAL" acceptance-out/crash-buffer.txt | head -c 850 | tr '\n' ' ' | { IFS= read -r l; echo "::error::[crash] $l"; } || true
           fi
 
       - name: Publish check summary
