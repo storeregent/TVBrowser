@@ -1,0 +1,107 @@
+# W0 validation harness CI (brief §7).
+#
+# Builds the two debug APKs (standard + alt flavors) and runs the JVM unit
+# tests. CI is the build of record: the agent sandbox has no Android SDK
+# (H-C-2), so only this workflow proves the harness builds.
+#
+# Signing: debug builds only. If the repository secret W0H_DEBUG_KEYSTORE_B64
+# exists it is decoded and used (W0H_DEBUG_STORE_PASSWORD / W0H_DEBUG_KEY_ALIAS /
+# W0H_DEBUG_KEY_PASSWORD may override the documented defaults), so successive CI
+# builds install over each other. Without the secret the runner's default debug
+# key is used and each new CI build must be uninstalled before installing.
+# Never commit a keystore. No release builds, no Play upload, no publishing.
+
+name: w0-harness
+
+on:
+  push:
+    paths:
+      - 'prototype/w0-harness/**'
+      - '.github/workflows/w0-harness.yml'
+  pull_request:
+    paths:
+      - 'prototype/w0-harness/**'
+      - '.github/workflows/w0-harness.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Unit tests + debug APKs (standard & alt)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prototype/w0-harness
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare optional debug keystore from W0H_DEBUG_KEYSTORE_B64
+        env:
+          W0H_DEBUG_KEYSTORE_B64: ${{ secrets.W0H_DEBUG_KEYSTORE_B64 }}
+          W0H_DEBUG_STORE_PASSWORD: ${{ secrets.W0H_DEBUG_STORE_PASSWORD }}
+          W0H_DEBUG_KEY_ALIAS: ${{ secrets.W0H_DEBUG_KEY_ALIAS }}
+          W0H_DEBUG_KEY_PASSWORD: ${{ secrets.W0H_DEBUG_KEY_PASSWORD }}
+        run: |
+          if [ -n "$W0H_DEBUG_KEYSTORE_B64" ]; then
+            KEYSTORE="$RUNNER_TEMP/w0h-debug.jks"
+            printf '%s' "$W0H_DEBUG_KEYSTORE_B64" | base64 -d > "$KEYSTORE"
+            {
+              echo "W0H_DEBUG_STORE_FILE=$KEYSTORE"
+              echo "W0H_DEBUG_STORE_PASSWORD=${W0H_DEBUG_STORE_PASSWORD:-w0h-debug}"
+              echo "W0H_DEBUG_KEY_ALIAS=${W0H_DEBUG_KEY_ALIAS:-w0h-debug}"
+              echo "W0H_DEBUG_KEY_PASSWORD=${W0H_DEBUG_KEY_PASSWORD:-w0h-debug}"
+            } >> "$GITHUB_ENV"
+            echo "Secret keystore found: CI builds will install over each other."
+          else
+            echo "W0H_DEBUG_STORE_FILE=" >> "$GITHUB_ENV"
+            echo "No W0H_DEBUG_KEYSTORE_B64 secret: using the runner's default debug key (uninstall before each install)."
+          fi
+
+      - name: Build (JVM unit tests + both flavor debug APKs)
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon testStandardDebugUnitTest testAltDebugUnitTest assembleStandardDebug assembleAltDebug --stacktrace 2>&1 | tee gradle-output.log
+
+      - name: Publish gradle output tail to job summary (debug aid)
+        if: always()
+        run: |
+          LOG=gradle-output.log
+          {
+            echo "### Gradle output (last 300 lines)"
+            echo ''
+            echo '```text'
+            tail -n 300 "$LOG" 2>/dev/null || echo '(no log captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Emit key failure lines as ::error:: annotations (readable via the API).
+          {
+            grep -E "^e: file:" "$LOG" 2>/dev/null | head -n 6
+            grep -E "FAILURE:|What went wrong" "$LOG" 2>/dev/null | head -n 2
+            grep -E "> [a-zA-Z].*FAILED$|AssertionError|IllegalStateException|NullPointerException" "$LOG" 2>/dev/null | head -n 4
+          } | head -n 12 | while IFS= read -r line; do
+            echo "::error::${line:0:950}"
+          done
+
+      - name: Upload debug APKs as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: w0-harness-${{ steps.sha.outputs.short }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            prototype/w0-harness/harness/build/outputs/apk/standard/debug/*.apk
+            prototype/w0-harness/harness/build/outputs/apk/alt/debug/*.apk

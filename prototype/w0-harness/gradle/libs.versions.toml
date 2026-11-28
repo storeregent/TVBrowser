@@ -1,0 +1,33 @@
+[versions]
+# Latest stable at time of work (2026-11-28), checked against official release pages.
+agp = "9.5.1"                 # https://developer.android.com/build/releases/agp-9-5-0-release-notes (Gradle >= 9.6.0, JDK 17)
+kotlin = "2.4.21"             # https://kotlinlang.org/docs/releases.html (stable 2026-10-08)
+gradle = "9.6.0"              # AGP 9.5 minimum/default Gradle (gradle-wrapper.properties)
+composeBom = "2026.06.01"     # Latest stable BOM compatible with the brief's pinned compileSdk 36.
+                              # BOM 2026.08.00+ (Compose 1.12) requires compileSdk 37 and BOM 2026.11.01
+                              # requires 37.1 (AAR metadata) — flagged to the Lead, see README.
+tvMaterial = "1.1.0"          # https://developer.android.com/jetpack/androidx/releases/tv (stable 2026-05-06)
+webkit = "1.18.0"             # https://developer.android.com/jetpack/androidx/releases/webkit (stable 2026-10-07)
+activityCompose = "1.12.4"    # Latest activity line that works with compileSdk 36 (1.13.x needs compileSdk 37)
+coreKtx = "1.17.0"
+coroutines = "1.11.0"         # latest stable kotlinx-coroutines (Nov 2026)
+serializationJson = "1.12.0"  # latest stable kotlinx-serialization-json compatible with Kotlin 2.4.x
+junit = "4.13.2"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

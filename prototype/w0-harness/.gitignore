@@ -1,0 +1,14 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Harness build outputs (never commit APKs — AGENTS.md §7 / brief §1.6)
+*.apk
+*.aab
+*.jks
+*.keystore

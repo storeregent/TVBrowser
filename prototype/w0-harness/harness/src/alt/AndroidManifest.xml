@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Alt flavor only (T-15 / T-07 comparison): manifest-level WebView Safe Browsing opt-out and
+     legacy back-key opt-out. The `standard` flavor is the main manifest, unchanged. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:enableOnBackInvokedCallback="false">
+        <meta-data
+            android:name="android.webkit.WebView.EnableSafeBrowsing"
+            android:value="false" />
+    </application>
+</manifest>
