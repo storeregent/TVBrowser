@@ -99,7 +99,8 @@ jobs:
             grep -E "FAILURE:|What went wrong" "$LOG" 2>/dev/null | head -n 2
             grep -A 14 "What went wrong" "$LOG" 2>/dev/null | head -n 14
             grep -E "^> .*(error|failed|Failed|Error)" "$LOG" 2>/dev/null | head -n 6
-          } | head -n 24 | while IFS= read -r line; do
+            grep -E " > [a-zA-Z].*FAILED" "$LOG" 2>/dev/null | head -n 8
+          } | head -n 30 | while IFS= read -r line; do
             echo "::error::${line:0:950}"
           done
 
