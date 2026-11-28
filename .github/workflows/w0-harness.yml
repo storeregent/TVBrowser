@@ -209,14 +209,16 @@ jobs:
             echo "::error::[m2-summary] $(grep -E '^- \[' acceptance-out-m2/SUMMARY.md | tr '\n' '|' | head -c 1100)"
           fi
           for f in a7-am-start.txt a7-back.txt; do
-            [ -f "acceptance-out/$f" ] && echo "::error::[$f] $(head -c 400 "acceptance-out/$f" | tr '\n' ' ')"
+            [ -f "acceptance-out/$f" ] && echo "::error::[$f] $(tail -c 500 "acceptance-out/$f" | tr '\n' ' ')"
           done
           for f in b1-tab-open.txt b3-crash.txt; do
-            [ -f "acceptance-out-m2/$f" ] && echo "::error::[m2-$f] $(head -c 400 "acceptance-out-m2/$f" | tr '\n' ' ')"
+            [ -f "acceptance-out-m2/$f" ] && echo "::error::[m2-$f] $(tail -c 500 "acceptance-out-m2/$f" | tr '\n' ' ')"
           done
-          if [ -f acceptance-out/crash-buffer.txt ]; then
-            echo "::error::[crash] $(head -c 500 acceptance-out/crash-buffer.txt | tr '\n' ' ')"
+          if [ -f acceptance-out-m2/crash-buffer.txt ]; then
+            echo "::error::[m2-crash] $(head -c 500 acceptance-out-m2/crash-buffer.txt | tr '\n' ' ')"
           fi
+          echo "::error::[restore-grep] m1.1:$(grep -c "RESTORE_OFFER\|RESTORE_DISCARDED" acceptance-out/*.txt 2>/dev/null | tr '\n' ' ') m2:$(grep -c "RESTORE_OFFER\|RESTORE_DISCARDED" acceptance-out-m2/*.txt 2>/dev/null | tr '\n' ' ')"
+          echo "::error::[keyevents-a7] $(grep -c "KEY_EVENT" acceptance-out/a7-back.txt 2>/dev/null) back-keys:$(grep -c "KEYCODE_BACK" acceptance-out/a7-back.txt 2>/dev/null)"
 
       - name: Publish check summary
         if: always()
