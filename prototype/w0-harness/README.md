@@ -281,6 +281,19 @@ Pinned in `gradle/libs.versions.toml` (checked against official release pages on
   (30-day retention). It is **emulator evidence only** — no
   W0 test (T-xx/P-x) is marked PASS by it; device statuses come only from the
   founder's runs.
+* **A4 WCAG AA contrast table** (D-2; computed by `util/ContrastTest`, which
+  asserts every pair ≥ 4.5:1 — verified green in CI):
+
+  | Pair | Colours | Ratio | AA (≥4.5:1) |
+  |---|---|---|---|
+  | onBackground on background (body text) | `#E6EDF5` on `#0E1116` | 16.03:1 | PASS |
+  | onSurface on surface (cards, HUD, rows) | `#E6EDF5` on `#1A2230` | 13.53:1 | PASS |
+  | mutedText on background (labels, notes) | `#9AA5B4` on `#0E1116` | 7.58:1 | PASS |
+  | mutedText on surface (secondary text on cards) | `#9AA5B4` on `#1A2230` | 6.40:1 | PASS |
+  | onFocusContainer on focusContainer (focused rows/buttons) | `#0B1220` on `#2684FF` | 5.20:1 | PASS |
+  | onPrimary on primary (primary-filled states) | `#FFFFFF` on `#1B5FD9` | 5.70:1 | PASS |
+  | onSurface on surfaceRaised (button labels, unfocused) | `#E6EDF5` on `#1D2733` | 12.80:1 | PASS |
+  | mutedText on surfaceRaised (muted button labels) | `#9AA5B4` on `#1D2733` | 6.05:1 | PASS |
 * **M2/M3 features are absent by design:** 2-live tab pool + standby modes,
   renderer-recovery triggers (`chrome://crash`), session restore, fullscreen
   video container, popup lab, service-worker probe/blocklist, Safe Browsing
