@@ -173,24 +173,22 @@ a2_walk() { # a2_walk <keyevent> <max>: press key until the focused label repeat
 dumpui a2_step0
 VISITED=("$(a2_label)") # step0 = initial focus (first test URL)
 a2_press 19; VISITED+=("$(a2_label)")  # UP -> button row
-a2_walk 22 6                           # RIGHT to the row edge
-a2_walk 21 8                           # LEFT to the row edge (passes every button)
+a2_walk 21 8                           # LEFT: sweep the button row leftwards
 CUR="$(a2_label)"
 case "$CUR" in
-  URL|Go)
-    # LEFT jumped up to the top row already; visit the other top-row control
-    if [ "$CUR" = "URL" ]; then a2_press 22; else a2_press 21; fi
-    VISITED+=("$(a2_label)")
-    ;;
-  *)
-    a2_press 19                        # UP -> top row (URL entry or Go)
-    TOP1="$(a2_label)"; VISITED+=("$TOP1")
-    if [ "$TOP1" = "URL" ]; then a2_press 22; else a2_press 21; fi
-    VISITED+=("$(a2_label)")           # the other top-row control
-    ;;
+  URL|Go) a2_press 20; VISITED+=("$(a2_label)") ;;  # LEFT jumped up a row: re-enter the button row
 esac
-a2_press 20; VISITED+=("$(a2_label)")  # DOWN -> button row
-a2_press 20; VISITED+=("$(a2_label)")  # DOWN -> test URL list
+a2_walk 22 8                           # RIGHT: sweep rightwards (covers the rest of the row)
+CUR="$(a2_label)"
+case "$CUR" in
+  URL|Go) ;;                                      # RIGHT jumped up to the top row already
+  *) a2_press 19; VISITED+=("$(a2_label)") ;;     # UP -> top row (URL entry or Go)
+esac
+CUR="$(a2_label)"
+if [ "$CUR" = "URL" ]; then a2_press 22; else a2_press 21; fi
+VISITED+=("$(a2_label)")                # the other top-row control
+a2_press 20; VISITED+=("$(a2_label)")   # DOWN -> button row
+a2_press 20; VISITED+=("$(a2_label)")   # DOWN -> test URL list
 { echo "A2 traversal (adaptive walk, focusedText|focusedClass):"
   for i in "${!VISITED[@]}"; do echo "  step$i: ${VISITED[$i]}"; done
 } > "$OUT/a2-focus-traversal.txt"
