@@ -10,17 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import dev.tvbrowse.w0harness.app.AppState
 import dev.tvbrowse.w0harness.app.Screen
@@ -30,7 +28,8 @@ import dev.tvbrowse.w0harness.web.WebViewPool
 
 /**
  * Browser (brief §4.2): one WebView in an imperative host FrameLayout, plus the
- * Compose HUD (URL, Back, Forward, Reload, Tabs count, Menu).
+ * Compose HUD (URL, Back, Forward, Reload, Tabs count, Menu). M1.1: themed
+ * focus-visible HUD buttons (D-2/D-3).
  *
  * D-pad focus inside the page uses the WebView's native focus navigation; the
  * HUD only exists while visible (Menu key / long-OK toggles it).
@@ -67,7 +66,7 @@ fun BrowserScreen(pool: WebViewPool, onNavigateBack: () -> Unit) {
                     fontSize = 12.sp,
                     color = HarnessColors.MutedText,
                 )
-                Button(onClick = {
+                TvButton(onClick = {
                     AppState.webViewError = null
                     AppState.screen = Screen.Home
                 }) { Text("Back to Home") }
@@ -97,14 +96,14 @@ private fun HudBar(pool: WebViewPool, onNavigateBack: () -> Unit, focusRequester
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onNavigateBack, modifier = Modifier.focusRequester(focusRequester)) { Text("Back") }
-            Button(onClick = { pool.goForward() }) { Text("Fwd") }
-            Button(onClick = { pool.reload() }) { Text("Reload") }
+            TvButton(onClick = onNavigateBack, focusRequester = focusRequester) { Text("Back") }
+            TvButton(onClick = { pool.goForward() }) { Text("Fwd") }
+            TvButton(onClick = { pool.reload() }) { Text("Reload") }
             // Tabs HUD element (§4.2). The live count is 1 in M1 (single WebView);
             // the 2-live/10-stored tab manager arrives with M2 (§5.3).
             Text("Tabs 1/10", fontSize = 14.sp, color = HarnessColors.MutedText)
             Spacer(Modifier.weight(1f))
-            Button(onClick = {
+            TvButton(onClick = {
                 AppState.hudVisible = false
                 SessionLog.log("HUD_TOGGLED", jsonObject("visible" to false, "trigger" to "hud_button"))
             }) { Text("Hide (Menu)") }

@@ -15,14 +15,22 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.lifecycleScope
+import dev.tvbrowse.w0harness.app.AdbAction
+import dev.tvbrowse.w0harness.app.AdbExtras
 import dev.tvbrowse.w0harness.app.AppState
 import dev.tvbrowse.w0harness.app.Screen
 import dev.tvbrowse.w0harness.app.SettingsStore
+import dev.tvbrowse.w0harness.info.DeviceInfoCollector
+import dev.tvbrowse.w0harness.log.LogIo
 import dev.tvbrowse.w0harness.log.SessionLog
 import dev.tvbrowse.w0harness.ui.HarnessRoot
 import dev.tvbrowse.w0harness.util.ConfigurationDiff
+import dev.tvbrowse.w0harness.util.UrlNormalizer
 import dev.tvbrowse.w0harness.util.jsonObject
 import dev.tvbrowse.w0harness.web.WebViewPool
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Shared browser activity implementation (brief §3.2). The two concrete classes
@@ -30,9 +38,9 @@ import dev.tvbrowse.w0harness.web.WebViewPool
  *  - [BrowserActivityLocked] (default): FR-14 config-change list, no recreation;
  *  - [BrowserActivityUnlocked]: no configChanges, reproduces the A-01 failure mode.
  *
- * This activity also hosts the M1 lifecycle & key logger (§5.2): every lifecycle
- * callback, every key event, configuration-change diffs, input/display device
- * events and the T-07 back-key counters go through [SessionLog].
+ * This activity also hosts the M1 lifecycle & key logger (§5.2) and the M1.1
+ * additions: BACK_DISPATCH decision logging (D-7), adb hook application (D-5)
+ * and the onStop log flush (D-4).
  */
 abstract class BrowserActivityBase : ComponentActivity() {
 
@@ -76,6 +84,7 @@ abstract class BrowserActivityBase : ComponentActivity() {
         setContent {
             HarnessRoot(activity = this, pool = pool, settings = settings, onNavigateBack = ::navigateBack)
         }
+        applyAdbLaunchCommands()
     }
 
     override fun onDestroy() {
@@ -87,6 +96,13 @@ abstract class BrowserActivityBase : ComponentActivity() {
         displayManager?.unregisterDisplayListener(displayListener)
         pool.destroyAll("activity_destroyed")
         super.onDestroy()
+    }
+
+    /** D-4: flush the async log writer when the app goes to the background. */
+    override fun onStop() {
+        SessionLog.log("ACTIVITY_STOP", jsonObject("variant" to activityVariant))
+        super.onStop()
+        LogIo.flushSync()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -108,25 +124,139 @@ abstract class BrowserActivityBase : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
     }
 
-    // ------------------------------------------------------------------ back key
+    // ------------------------------------------------------------------ back key (D-7)
 
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
             AppState.backCallbackInvocations++
-            SessionLog.log(
-                "BACK_CALLBACK_INVOKED",
-                jsonObject("count" to AppState.backCallbackInvocations, "screen" to AppState.screen.name),
-            )
-            navigateBack()
+            val canGoBack = pool.currentWebView?.canGoBack()
+            when {
+                AppState.screen == Screen.Browser && canGoBack == true -> {
+                    logBackDispatch(canGoBack, "webview_history")
+                    pool.handleBack()
+                }
+                AppState.screen != Screen.Home -> {
+                    logBackDispatch(canGoBack, "screen_navigation")
+                    AppState.screen = Screen.Home
+                }
+                else -> {
+                    // Platform default (HARNESS_BRIEF does not override it): Back at
+                    // Home with no web history and no open dialog finishes the activity.
+                    logBackDispatch(canGoBack, "activity_finish")
+                    finish()
+                }
+            }
         }
     }
 
-    /** Shared back semantics: WebView history first, then screen stack, then finish. */
+    private fun logBackDispatch(canGoBack: Boolean?, handledBy: String) {
+        SessionLog.log(
+            "BACK_DISPATCH",
+            jsonObject(
+                "screen" to AppState.screen.name,
+                "canGoBack" to canGoBack,
+                "handledBy" to handledBy,
+                "variant" to activityVariant,
+                "callbackInvocations" to AppState.backCallbackInvocations,
+            ),
+        )
+    }
+
+    /** Shared back semantics kept for the HUD Back button. */
     private fun navigateBack() {
         when {
             AppState.screen == Screen.Browser && pool.handleBack() -> Unit
             AppState.screen != Screen.Home -> AppState.screen = Screen.Home
             else -> finish() // clean exit clears the session_open marker
+        }
+    }
+
+    // ------------------------------------------------------------------ adb launch hooks (D-5)
+
+    private fun applyAdbLaunchCommands() {
+        val adb = AdbExtras.parse(
+            mapOf(
+                AdbExtras.KEY_URL to intent.getStringExtra(AdbExtras.KEY_URL),
+                AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
+                AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
+                AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
+                AdbExtras.KEY_LOCKED to intent.getStringExtra(AdbExtras.KEY_LOCKED)
+                    ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString(),
+            ),
+        )
+        if (!adb.hasAny) return
+        SessionLog.log(
+            "ADB_HOOKS",
+            jsonObject(
+                "url" to adb.url,
+                "screen" to adb.screen?.name,
+                "action" to adb.action?.name,
+                "label" to adb.label,
+                "ignored" to adb.ignored,
+                "stage" to "browser",
+            ),
+        )
+
+        adb.screen?.let { screen ->
+            AppState.screen = screen
+            SessionLog.log("ADB_SCREEN_OPENED", jsonObject("screen" to screen.name))
+        }
+
+        adb.url?.let { raw ->
+            val normalized = UrlNormalizer.normalize(raw)
+            if (normalized == null) {
+                SessionLog.log(
+                    "NAV_REQUEST_IGNORED",
+                    jsonObject("source" to "adb", "input" to raw, "reason" to "does not parse as a URL"),
+                )
+            } else {
+                SessionLog.log(
+                    "NAV_REQUEST",
+                    jsonObject("source" to "adb", "requested" to raw, "normalized" to normalized),
+                )
+                AppState.pendingUrl = normalized
+                AppState.screen = Screen.Browser
+            }
+        }
+
+        adb.action?.let { action ->
+            when (action) {
+                AdbAction.MARK_STEP -> {
+                    val label = adb.label ?: "(adb mark)"
+                    SessionLog.mark(label)
+                    AppState.actionResult = "Marked step (adb): $label"
+                    if (AppState.screen == Screen.Browser) AppState.screen = Screen.Home
+                }
+                AdbAction.EXPORT_DEVICEINFO -> {
+                    AppState.screen = Screen.DeviceInfo
+                    performExportDeviceinfo()
+                }
+                AdbAction.EXPORT_ALL -> {
+                    AppState.screen = Screen.Logs
+                    performExportAll()
+                }
+            }
+        }
+    }
+
+    private fun performExportDeviceinfo() {
+        val activity = this
+        lifecycleScope.launch(Dispatchers.IO) {
+            val file = SessionLog.exportDeviceInfo(DeviceInfoCollector.collect(activity))
+            SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "export_deviceinfo", "path" to file.absolutePath))
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                AppState.actionResult = "Exported: ${file.absolutePath}"
+            }
+        }
+    }
+
+    private fun performExportAll() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val zip = SessionLog.exportAll()
+            SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "export_all", "path" to zip.absolutePath))
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                AppState.actionResult = "Exported: ${zip.absolutePath}"
+            }
         }
     }
 

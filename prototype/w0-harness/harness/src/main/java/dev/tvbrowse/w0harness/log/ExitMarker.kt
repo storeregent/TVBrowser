@@ -12,6 +12,9 @@ import java.io.File
  *    PREVIOUS_SESSION_DIED together with the last 50 log lines of the dead
  *    session. This catches the single-process case where a renderer crash
  *    kills the whole app.
+ *
+ * Marker writes/deletes run on the [LogIo] thread (M1.1 D-4); the startup read
+ * is a single small-file read at process start.
  */
 object ExitMarker {
 
@@ -47,18 +50,15 @@ object ExitMarker {
     }
 
     fun write(context: Context, session: String, tsMs: Long, logFilePath: String) {
-        runCatching {
-            markerFile(context).writeText(
-                jsonObject(
-                    "session" to session,
-                    "ts" to tsMs,
-                    "logFile" to logFilePath,
-                ).toString(),
-            )
+        val payload = jsonObject("session" to session, "ts" to tsMs, "logFile" to logFilePath).toString()
+        LogIo.execute {
+            runCatching { markerFile(context).writeText(payload) }
         }
     }
 
     fun clear(context: Context) {
-        runCatching { markerFile(context).delete() }
+        LogIo.execute {
+            runCatching { markerFile(context).delete() }
+        }
     }
 }

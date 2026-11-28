@@ -14,11 +14,14 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * JSONL session logging (brief §6):
+ * JSONL session logging (brief §6, M1.1 D-4):
  *  - one file per app session in getExternalFilesDir("w0logs"),
  *  - named w0h_<deviceModel>_<yyyyMMdd-HHmmss>.jsonl,
  *  - every line is a [LogLine] and is mirrored to logcat with tag `W0H`,
- *  - the first line is the QA packet (SESSION_HEADER).
+ *  - the first line is the QA packet (SESSION_HEADER),
+ *  - file I/O happens on the single [LogIo] thread, never on the calling
+ *    (main) thread. Timestamps are taken at call time and the single worker
+ *    preserves event order.
  */
 object SessionLog {
 
@@ -36,12 +39,14 @@ object SessionLog {
             initialized = true
             sessionId = LogLine.newSessionId()
             val external = context.getExternalFilesDir("w0logs")
-            logsDir = (external ?: File(context.filesDir, "w0logs")).apply { mkdirs() }
+            logsDir = (external ?: File(context.filesDir, "w0logs"))
             sessionFile = File(
                 logsDir,
                 "w0h_${sanitize(Build.MODEL)}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))}.jsonl",
             )
 
+            // Header data is collected on the calling thread (cheap, in-memory);
+            // the file write goes through LogIo (off main thread, first in queue).
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
             val memInfo = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
             val wvPackage = runCatching {
@@ -68,22 +73,31 @@ object SessionLog {
                 activityVariant = activityVariant,
                 settings = settings,
             )
-            writeLine(LogLine.at(System.currentTimeMillis(), sessionId, "SESSION_HEADER", header))
-            if (external == null) {
-                log("STORAGE_FALLBACK", jsonObject("reason" to "getExternalFilesDir returned null; logs are in internal storage"))
+            val line = LogLine.at(System.currentTimeMillis(), sessionId, "SESSION_HEADER", header)
+            LogIo.execute {
+                runCatching {
+                    logsDir.mkdirs()
+                    sessionFile.appendText(line.toJson() + "\n")
+                    if (external == null) {
+                        appendDirect(
+                            LogLine.now(sessionId, "STORAGE_FALLBACK", jsonObject("reason" to "getExternalFilesDir returned null; logs are in internal storage")),
+                        )
+                    }
+                }.onFailure { Log.e(LOGCAT_TAG, "header write failed: ${it.message}") }
             }
+            Log.i(LOGCAT_TAG, line.toJson())
         }
     }
 
     fun log(event: String, data: JsonObject = jsonObject()) {
+        // Timestamp + serialization at CALL time (D-4); the write is queued.
         val line = LogLine.now(sessionId, event, data)
-        synchronized(lock) {
-            if (initialized) {
-                runCatching { sessionFile.appendText(line.toJson() + "\n") }
-                    .onFailure { Log.e(LOGCAT_TAG, "append failed: ${it.message}") }
-            }
+        Log.i(LOGCAT_TAG, line.toJson()) // synchronous logcat mirror (allowed)
+        if (!initialized) return
+        LogIo.execute {
+            runCatching { appendDirect(line) }
+                .onFailure { Log.e(LOGCAT_TAG, "append failed: ${it.message}") }
         }
-        Log.i(LOGCAT_TAG, line.toJson())
     }
 
     fun mark(label: String) = log("MARK", jsonObject("label" to label))
@@ -96,16 +110,23 @@ object SessionLog {
 
     fun listLogFiles(): List<File> = logsDir.listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: emptyList()
 
-    /** Writes device_info_<ts>.json next to the session logs (brief §5.1). */
+    /**
+     * Writes device_info_<ts>.json next to the session logs (brief §5.1).
+     * Callers must invoke this off the main thread (the UI uses Dispatchers.IO);
+     * the session file is flushed first so the export contains every line.
+     */
     fun exportDeviceInfo(info: JsonObject): File {
+        flushSync()
         val target = File(logsDir, "device_info_${fileTimestamp()}.json")
         target.writeText(info.toString())
         log("DEVICE_INFO_EXPORTED", jsonObject("path" to target.absolutePath, "bytes" to target.length()))
+        flushSync()
         return target
     }
 
     /** "Export all" (brief §6): writes a single zip with every log file into the same directory. */
     fun exportAll(): File {
+        flushSync()
         val zip = File(logsDir, "w0h_export_${fileTimestamp()}.zip")
         val files = listLogFiles().filter { it != zip }
         ZipOutputStream(FileOutputStream(zip)).use { zos ->
@@ -116,12 +137,13 @@ object SessionLog {
             }
         }
         log("EXPORT_ALL", jsonObject("zip" to zip.absolutePath, "entries" to files.size))
+        flushSync()
         return zip
     }
 
-    private fun writeLine(line: LogLine) {
+    /** Must be called on the LogIo thread (queue order already guarantees exclusivity). */
+    private fun appendDirect(line: LogLine) {
         sessionFile.appendText(line.toJson() + "\n")
-        Log.i(LOGCAT_TAG, line.toJson())
     }
 
     private fun versionCodeOf(info: android.content.pm.PackageInfo?): Long? = when {

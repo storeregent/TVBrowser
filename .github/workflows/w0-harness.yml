@@ -1,15 +1,18 @@
-# W0 validation harness CI (brief §7).
+# W0 validation harness CI (brief §7; M1.1 adds the emulator acceptance job).
 #
-# Builds the two debug APKs (standard + alt flavors) and runs the JVM unit
-# tests. CI is the build of record: the agent sandbox has no Android SDK
-# (H-C-2), so only this workflow proves the harness builds.
+# Job 1 (build): JVM unit tests + the two debug APKs (standard + alt flavors),
+#                uploaded as artifact w0-harness-<shortSHA> (30 days).
+# Job 2 (emulator-acceptance): boots an API 34 Android TV emulator, runs the
+#                M1.1 A1-A8 checks (tools/emulator-m1.1-checks.sh) and uploads
+#                screenshots/UI dumps/logs as w0-harness-emulator-m1.1-<shortSHA>.
+#                Emulator evidence only — never a W0 test status.
 #
 # Signing: debug builds only. If the repository secret W0H_DEBUG_KEYSTORE_B64
-# exists it is decoded and used (W0H_DEBUG_STORE_PASSWORD / W0H_DEBUG_KEY_ALIAS /
-# W0H_DEBUG_KEY_PASSWORD may override the documented defaults), so successive CI
-# builds install over each other. Without the secret the runner's default debug
-# key is used and each new CI build must be uninstalled before installing.
-# Never commit a keystore. No release builds, no Play upload, no publishing.
+# exists it is decoded and used, so successive CI builds install over each
+# other. Without the secret the runner's default debug key is used and each new
+# CI build must be uninstalled before installing. Never commit a keystore.
+# No release builds, no Play upload, no publishing steps (H-6 benchmark build is
+# skipped pending founder decision F-H5).
 
 name: w0-harness
 
@@ -105,3 +108,88 @@ jobs:
           path: |
             prototype/w0-harness/harness/build/outputs/apk/standard/debug/*.apk
             prototype/w0-harness/harness/build/outputs/apk/alt/debug/*.apk
+
+  emulator-acceptance:
+    name: Emulator A1-A8 checks (API 34 TV)
+    runs-on: ubuntu-latest
+    needs: build
+    defaults:
+      run:
+        working-directory: prototype/w0-harness
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm
+
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build standard debug APK
+        run: ./gradlew --no-daemon assembleStandardDebug
+
+      - name: Install TV system image (API 34)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-34;android-tv;x86_64" > /dev/null
+
+      - name: Create AVD
+        run: |
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86_64" -d tv_1080p \
+            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86_64" \
+            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86_64" -d pixel
+
+      - name: Boot emulator (background)
+        run: |
+          "$ANDROID_HOME/emulator/emulator" -avd tv34 \
+            -no-window -no-audio -gpu swiftshader_indirect -no-boot-anim -accel on \
+            -no-snapshot -wipe-data > emulator-boot.log 2>&1 &
+
+      - name: Wait for boot
+        run: |
+          adb wait-for-device
+          for i in $(seq 1 90); do
+            BOOTED="$(adb shell getprop sys.boot_completed | tr -d '\r')"
+            if [ "$BOOTED" = "1" ]; then echo "boot completed"; exit 0; fi
+            sleep 5
+          done
+          echo "emulator did not finish booting"; tail -n 100 emulator-boot.log; exit 1
+
+      - name: Install APKs
+        run: |
+          adb install -r harness/build/outputs/apk/standard/debug/harness-standard-debug.apk
+          adb install -r harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "(alt install failed; standard checks continue)"
+
+      - name: Run A1-A8 acceptance checks
+        run: tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
+
+      - name: Publish check summary
+        if: always()
+        run: |
+          if [ -f acceptance-out/SUMMARY.md ]; then
+            cat acceptance-out/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload emulator evidence as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w0-harness-emulator-m1.1-${{ steps.sha.outputs.short }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            prototype/w0-harness/acceptance-out/
