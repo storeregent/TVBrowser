@@ -116,17 +116,17 @@ object SessionLog {
      * the session file is flushed first so the export contains every line.
      */
     fun exportDeviceInfo(info: JsonObject): File {
-        flushSync()
+        LogIo.flushSync()
         val target = File(logsDir, "device_info_${fileTimestamp()}.json")
         target.writeText(info.toString())
         log("DEVICE_INFO_EXPORTED", jsonObject("path" to target.absolutePath, "bytes" to target.length()))
-        flushSync()
+        LogIo.flushSync()
         return target
     }
 
     /** "Export all" (brief §6): writes a single zip with every log file into the same directory. */
     fun exportAll(): File {
-        flushSync()
+        LogIo.flushSync()
         val zip = File(logsDir, "w0h_export_${fileTimestamp()}.zip")
         val files = listLogFiles().filter { it != zip }
         ZipOutputStream(FileOutputStream(zip)).use { zos ->
@@ -137,7 +137,7 @@ object SessionLog {
             }
         }
         log("EXPORT_ALL", jsonObject("zip" to zip.absolutePath, "entries" to files.size))
-        flushSync()
+        LogIo.flushSync()
         return zip
     }
 
