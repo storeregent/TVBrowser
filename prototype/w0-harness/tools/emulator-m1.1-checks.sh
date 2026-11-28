@@ -149,7 +149,7 @@ IME_SHOWN="$(adb shell dumpsys input_method 2>/dev/null | grep -c 'mInputShown=t
 # ================================================================= A2: D-pad traversal coverage
 dumpui a2_step0
 VISITED=("$(focused_node "$OUT/a2_step0.xml")") # step0 = initial focus (Example.com)
-KEYS=(19 21 21 21 21 19 22 20 20) # UP, LEFT x4, UP, RIGHT, DOWN, DOWN
+KEYS=(19 21 21 21 21 19 21 20 20) # UP, LEFT x4, UP (-> Go), LEFT (-> URL entry), DOWN, DOWN
 STEP=0
 for key in "${KEYS[@]}"; do
   adb shell input keyevent "$key" >/dev/null 2>&1 || true

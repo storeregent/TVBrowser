@@ -160,39 +160,24 @@ jobs:
         if: failure()
         working-directory: prototype/w0-harness
         run: |
-          for f in a2-focus-traversal.txt a5-hook-url.txt a5-screen-logcat.txt a5-hook-export-info.txt a3-logcat.txt; do
+          if [ -f acceptance-out/SUMMARY.md ]; then
+            grep -E "FAIL" acceptance-out/SUMMARY.md | cut -c1-300 | head -5 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
+          S=""
+          for f in a5-hook-url.txt a5-screen-logcat.txt a5-hook-export-info.txt a5-hook-export-all.txt a5-hook-mark.txt a5-hook-unlocked.txt a3-logcat.txt a3-down-logcat.txt a7-back.txt; do
             if [ -f "acceptance-out/$f" ]; then
-              echo "::error::[$f] $(head -c 750 "acceptance-out/$f" | tr '\n' ' ')"
+              M="$(grep -oE "NAV_REQUEST|ADB_SCREEN_OPENED|DEVICE_INFO_EXPORTED|EXPORT_ALL|MARK|LOAD_URL|url_edit_exit|ADB_HOOKS" "acceptance-out/$f" | sort | uniq -c | awk '{printf "%s:%s ", $2, $1}')"
+              S="$S [$f]${M:-none}"
             else
-              echo "::error::[$f] MISSING"
+              S="$S [$f]MISSING"
             fi
           done
-          for x in a3_before_ok nav_probe a3_edit_mode; do
-            if [ -f "acceptance-out/$x.xml" ]; then
-              echo "::error::[$x] $(python3 - "acceptance-out/$x.xml" <<'PY' 2>/dev/null
-          import sys, xml.etree.ElementTree as ET
-          try:
-              tree = ET.parse(sys.argv[1])
-          except Exception:
-              print("unparsable"); raise SystemExit
-          n = [e for e in tree.iter('node') if e.get('focused') == 'true']
-          if n:
-              e = n[0]
-              t = (e.get('text') or e.get('content-desc') or '').strip()
-              if not t:
-                  for d in e.iter('node'):
-                      if d is e:
-                          continue
-                      t = (d.get('text') or d.get('content-desc') or '').strip()
-                      if t:
-                          break
-              print("focused:", repr(t), e.get('class'))
-          else:
-              print("no focused node")
-          PY
-          )"
-            fi
-          done
+          echo "::error::log-markers:$S"
+          if [ -f acceptance-out/a2-focus-traversal.txt ]; then
+            echo "::error::[a2] $(grep -v '^A2' acceptance-out/a2-focus-traversal.txt | tr '\n' ' ' | head -c 600)"
+          fi
           if [ -f acceptance-out/crash-buffer.txt ]; then
             grep -m1 -A 5 "FATAL" acceptance-out/crash-buffer.txt | head -c 850 | tr '\n' ' ' | { IFS= read -r l; echo "::error::[crash] $l"; } || true
           fi
