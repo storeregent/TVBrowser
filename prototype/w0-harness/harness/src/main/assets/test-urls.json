@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "note": "Bundled, editable test URL list for the Home screen (brief §4.1). The harness never fetches anything on its own: every entry is only loaded when the tester selects it.",
+  "urls": [
+    { "label": "Example.com", "url": "https://example.com/", "note": "Minimal page, quick WebView sanity check" },
+    { "label": "Wikipedia portal", "url": "https://www.wikipedia.org/", "note": "JS-heavy portal, good for focus navigation" },
+    { "label": "MDN Web Docs", "url": "https://developer.mozilla.org/", "note": "Modern web platform features" },
+    { "label": "BBC News", "url": "https://www.bbc.com/news", "note": "Media-heavy news site" },
+    { "label": "P2 adblock reference (d3ward)", "url": "https://d3ward.github.io/toolz/adblock.html", "note": "P2 reference run: harness is the plain-WebView baseline" },
+    { "label": "Local data URL", "url": "data:text/html,<title>w0</title><h1>Local data URL</h1><p>Rendered offline, no network request.</p>", "note": "Offline rendering check" }
+  ]
+}
