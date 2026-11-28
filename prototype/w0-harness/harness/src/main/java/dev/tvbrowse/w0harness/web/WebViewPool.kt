@@ -86,7 +86,7 @@ class WebViewPool(private val activity: Activity, private val settings: Settings
     private var switchRestoredVia: String? = null
 
     private val assetLoader: WebViewAssetLoader = WebViewAssetLoader.Builder()
-        .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(activity.assets))
+        .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(activity))
         .build()
 
     val activeWebView: WebView?
@@ -388,10 +388,15 @@ class WebViewPool(private val activity: Activity, private val settings: Settings
         if (switchStartedElapsedMs == null) switchStartedElapsedMs = SystemClock.elapsedRealtime()
         // Live instance: the visual state callback completes the latency measurement.
         runCatching {
-            wv.postVisualStateCallback(0) { _ ->
-                completeSwitchLatency(tabId, via = "visual_state")
-                wv.post { wv.scrollTo(0, manager.tab(tabId)?.scrollY ?: 0) }
-            }
+            wv.postVisualStateCallback(
+                0,
+                object : WebView.VisualStateCallback() {
+                    override fun onComplete(requestId: Long) {
+                        completeSwitchLatency(tabId, via = "visual_state")
+                        wv.post { wv.scrollTo(0, manager.tab(tabId)?.scrollY ?: 0) }
+                    }
+                },
+            )
         }
         // Some pages never produce a new frame (already at rest): bounded fallback.
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
