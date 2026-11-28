@@ -39,15 +39,19 @@
             </intent-filter>
         </activity>
 
-        <!-- Default browser activity: swallows the FR-14 config-change list (no recreation). -->
+        <!-- Default browser activity: swallows the FR-14 config-change list (no recreation).
+             singleTask: `am start` relaunches (adb hooks, D-5) deliver onNewIntent to the
+             live instance instead of stacking duplicate instances. -->
         <activity
             android:name=".BrowserActivityLocked"
             android:exported="false"
+            android:launchMode="singleTask"
             android:configChanges="keyboard|keyboardHidden|navigation|uiMode|screenSize|smallestScreenSize|screenLayout|orientation|density" />
 
         <!-- Reproduces the A-01 failure mode: no configChanges, recreates on BT-remote/mouse changes. -->
         <activity
             android:name=".BrowserActivityUnlocked"
-            android:exported="false" />
+            android:exported="false"
+            android:launchMode="singleTask" />
     </application>
 </manifest>

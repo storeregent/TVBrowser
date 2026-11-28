@@ -1,23 +1,29 @@
 package dev.tvbrowse.w0harness.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import dev.tvbrowse.w0harness.log.SessionLog
 
@@ -36,41 +42,96 @@ private val PRESET_LABELS = listOf(
     "app foregrounded",
 )
 
+/**
+ * Mark-step dialog (M1.1 D-1/D-2): no material3, dark tv-material Surface, and
+ * the text input is never the initial focus (first preset is) and never traps
+ * the D-pad (same TvTextEntryRow pattern as Home).
+ */
 @Composable
-fun MarkStepDialog(onDismiss: () -> Unit, onMark: (String) -> Unit) {
+fun MarkStepDialog(onDismiss: () -> Unit) {
     var custom by rememberSaveable { mutableStateOf("") }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    val ime = LocalSoftwareKeyboardController.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Mark step") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Presets:")
-                PRESET_LABELS.forEach { label ->
-                    Row(Modifier.fillMaxWidth()) {
-                        Button(onClick = { SessionLog.mark(label); onDismiss() }) { Text(label, fontSize = 12.sp) }
-                    }
+    val presetFocus = remember { FocusRequester() }
+    val editFieldFocus = remember { FocusRequester() }
+    val markCustomFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        presetFocus.requestFocus() // initial focus: first preset, not the text field
+    }
+
+    LaunchedEffect(editing) {
+        if (editing) {
+            editFieldFocus.requestFocus()
+            ime?.show()
+        }
+    }
+
+    BackHandler(enabled = editing) {
+        editing = false
+        ime?.hide()
+        markCustomFocus.requestFocus()
+    }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.9f).padding(8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = SurfaceDefaults.colors(
+                containerColor = HarnessColors.Surface,
+                contentColor = HarnessColors.OnSurface,
+            ),
+        ) {
+            Column(
+                Modifier.padding(16.dp).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("Mark step", fontSize = 20.sp)
+                Text("Presets:", fontSize = 12.sp, color = HarnessColors.MutedText)
+                PRESET_LABELS.forEachIndexed { index, label ->
+                    TvButton(
+                        onClick = {
+                            SessionLog.mark(label)
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        focusRequester = if (index == 0) presetFocus else null,
+                    ) { Text(label, fontSize = 12.sp) }
                 }
-                OutlinedTextField(
+                TvTextEntryRow(
+                    label = "Custom",
                     value = custom,
                     onValueChange = { custom = it },
-                    label = { Text("Custom label") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    editing = editing,
+                    onEnterEdit = { editing = true },
+                    onExitEdit = {
+                        editing = false
+                        ime?.hide()
+                        markCustomFocus.requestFocus()
+                    },
+                    onCommit = {
+                        val label = custom.trim()
+                        if (label.isNotEmpty()) SessionLog.mark(label)
+                        onDismiss()
+                    },
+                    placeholder = "Press OK to type a label",
+                    modifier = Modifier.fillMaxWidth(),
+                    editFieldFocusRequester = editFieldFocus,
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvButton(
+                        onClick = {
+                            val label = custom.trim()
+                            if (label.isNotEmpty()) SessionLog.mark(label)
+                            onDismiss()
+                        },
+                        focusRequester = markCustomFocus,
+                    ) { Text("Mark custom") }
+                    TvButton(onClick = onDismiss) { Text("Close") }
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val label = custom.trim()
-                    if (label.isNotEmpty()) SessionLog.mark(label)
-                    onDismiss()
-                },
-            ) { Text("Mark custom") }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) { Text("Close") }
-        },
-    )
+        }
+    }
 }

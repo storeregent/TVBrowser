@@ -20,6 +20,9 @@ object AppState {
     /** Set when the WebView guard refused to create a WebView, or the renderer died (T-17). */
     var webViewError by mutableStateOf<String?>(null)
 
+    /** Result line for adb-driven actions (M1.1 D-5), shown on Home / target screens. */
+    var actionResult by mutableStateOf<String?>(null)
+
     /** SystemClock.elapsedRealtime() captured in Application.onCreate (T-18). */
     var appStartElapsedMs: Long = 0L
 

@@ -74,6 +74,8 @@ object DeviceInfoCollector {
                 "versionName" to wvPackage?.versionName,
                 "versionCode" to versionCodeOf(wvPackage),
                 "isGetWebViewPackageNull" to (wvPackage == null),
+                "multiProcessEnabled" to multiProcessState(wvPackage != null),
+                "rendererProcesses" to rendererProcesses(activity),
             ),
             "webviewFeatures" to featureMatrix(),
             "display" to displayInfo(activity),
@@ -108,6 +110,26 @@ object DeviceInfoCollector {
             "multiProcessSupported" to multiProcessSupported,
             "multiProcessEnabled" to multiProcessEnabled,
         )
+    }
+
+    /** In-app MULTI_PROCESS state (H-7): shown on Device Info and in the export. */
+    fun multiProcessState(hasWebView: Boolean): Boolean? {
+        if (!hasWebView) return null
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROCESS)) return null
+        return runCatching { WebViewCompat.isMultiProcessEnabled() }.getOrNull()
+    }
+
+    /**
+     * Best-effort WebView renderer PID list (H-7): the renderer shows up as a
+     * `<webview package>:sandboxed_process*` process of this app. Empty when the
+     * platform does not expose it or when no page has rendered yet.
+     */
+    fun rendererProcesses(activity: Activity): List<kotlinx.serialization.json.JsonObject> {
+        val am = activity.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val procs = runCatching { am.runningAppProcesses ?: emptyList() }.getOrDefault(emptyList())
+        return procs
+            .filter { it.processName.contains("sandboxed_process") }
+            .map { jsonObject("pid" to it.pid, "name" to it.processName) }
     }
 
     /** Reflects WebViewFeature by constant name so the matrix cannot drift from FEATURE_MATRIX. */

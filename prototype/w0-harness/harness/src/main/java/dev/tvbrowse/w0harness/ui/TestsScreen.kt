@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.Text
 import dev.tvbrowse.w0harness.app.AppState
 import dev.tvbrowse.w0harness.app.Screen
@@ -59,8 +60,17 @@ fun TestsScreen() {
                             2 -> AppState.screen = Screen.Home
                         }
                     },
+                    colors = TvFocus.listItemColors(enabled = entry.action != 0),
+                    scale = TvFocus.listItemScale(),
+                    border = TvFocus.listItemBorder(),
                     headlineContent = { Text(entry.title) },
-                    supportingContent = { Text("[${entry.milestone}] ${entry.detail}", fontSize = 11.sp, color = HarnessColors.MutedText) },
+                    supportingContent = {
+                        Text(
+                            "[${entry.milestone}] ${entry.detail}",
+                            fontSize = 11.sp,
+                            color = LocalContentColor.current.copy(alpha = 0.75f),
+                        )
+                    },
                 )
             }
         }

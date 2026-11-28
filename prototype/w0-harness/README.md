@@ -44,8 +44,8 @@ renderer-recovery triggers, popup lab, service-worker probe and cursor mode are
    (workflow **w0-harness**, artifact `w0-harness-<shortSHA>`), then:
 
    ```bash
-   adb install -r w0harness-standard-debug.apk    # applicationId dev.tvbrowse.w0harness
-   adb install -r w0harness-alt-debug.apk         # applicationId dev.tvbrowse.w0harness.alt
+   adb install -r harness-standard-debug.apk    # applicationId dev.tvbrowse.w0harness
+   adb install -r harness-alt-debug.apk         # applicationId dev.tvbrowse.w0harness.alt
    ```
 
    Both flavors install side by side as **“TVBrowse W0 Harness”**.
@@ -70,6 +70,54 @@ open it with a file manager and confirm the unknown-sources prompt.
 Find **TVBrowse W0 Harness** on the TV launcher (banner 320×180 included). The
 launcher activity routes to the activity variant selected in **Settings →
 Activity variant** (default: *locked*).
+
+### 2.4 adb automation (M1.1, D-5)
+
+Every M1 test is also drivable over adb via intent extras on the launcher
+activity. The only exported component is the launcher; the browser activities
+are `exported="false"`, so these hooks work through `am start` (or the app UI).
+
+| Hook | Effect |
+|---|---|
+| `-e w0h.url <url>` | Open the URL (same path as Go: normalised, logged as `NAV_REQUEST` with `source=adb`) |
+| `-e w0h.screen home\|deviceinfo\|logs\|settings\|tests` | Open that screen |
+| `-e w0h.action export_deviceinfo\|export_all\|mark_step` | Perform the action, write to the normal `w0logs/` folder, log the output path and show the result on screen. `mark_step` also takes `-e w0h.label <text>` |
+| `--ez w0h.locked true\|false` | Pick the Locked or Unlocked activity variant for this launch only (logged) |
+
+Copy-paste commands (package `dev.tvbrowse.w0harness`; add `.alt` for the alt flavor):
+
+```bash
+# Open a URL directly
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.url "https://example.com/"
+
+# Open a screen
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.screen deviceinfo
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.screen tests
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.screen logs
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.screen settings
+
+# Exports and marks (results also appear on screen and in the session log)
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.action export_deviceinfo
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.action export_all
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity -e w0h.action mark_step -e w0h.label "P1: remote asleep"
+
+# Pick the activity variant for this launch
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity --ez w0h.locked false   # Unlocked (A-01)
+adb shell am start -n dev.tvbrowse.w0harness/.EntryActivity --ez w0h.locked true    # Locked (default)
+```
+
+**`tools/run-m1.sh`** runs the full M1 sequence non-interactively where
+possible (device props → 5× cold start → Device Info export → open each bundled
+test URL → Export all → pull logs):
+
+```bash
+tools/run-m1.sh                          # standard flavor
+tools/run-m1.sh dev.tvbrowse.w0harness.alt   # alt flavor
+```
+
+Outputs land in `./m1-run-<timestamp>/`: `device-properties.txt`,
+`cold-start-runs.txt`, and the pulled `w0logs/` JSONL session files. Run
+`tools/logcat.sh` in a second terminal to capture the `W0H` logcat mirror.
 
 ---
 
@@ -149,12 +197,32 @@ tools/logcat.sh
 
 ---
 
-## 6. Session log events (M1)
+## 5.1 Back key at Home (M1.1, D-7)
+
+On the Haier device the **standard** flavor did not exit at Home on adb BACK,
+while the alt flavor did. Root cause: the D-1 focus trap — the (then-focused)
+Compose text field/IME swallowed the key, so the dispatcher never saw it.
+
+M1.1 behaviour (platform default; HARNESS_BRIEF does not override it):
+
+* If the URL edit mode is open: the first BACK closes edit mode (does **not**
+  load), the second BACK closes the IME if the system opened it.
+* Otherwise at Home with no web history and no open dialog, BACK falls through
+  to the system: the activity finishes (clean exit, marker cleared).
+* Every Back decision is logged as `BACK_DISPATCH`
+  `{screen, canGoBack, handledBy}` with `handledBy` one of
+  `url_edit_exit`, `webview_history`, `screen_navigation`, `activity_finish`.
+  When the IME consumes a Back to hide itself, no app-side
+  `BACK_DISPATCH` line appears for that press (the `KEY_EVENT` line still
+  shows the key), which is the observable difference between the flavors.
+
+## 6. Session log events (M1 / M1.1)
 
 `SESSION_HEADER`, `APP_START`, `ENTRY_ROUTE`, `ACTIVITY_CREATE/DESTROY`,
-`LIFECYCLE`, `CONFIGURATION_CHANGED` (field diff), `WINDOW_FOCUS_CHANGED`,
-`KEY_EVENT` (code/action/repeat/device), `BACK_CALLBACK_INVOKED`,
-`HUD_TOGGLED`, `URL_ENTRY_ACCEPTED/IGNORED`, `TEST_URL_SELECTED`, `LOAD_URL`,
+`ACTIVITY_STOP` (log flush), `LIFECYCLE`, `CONFIGURATION_CHANGED` (field diff),
+`WINDOW_FOCUS_CHANGED`, `KEY_EVENT` (code/action/repeat/device),
+`BACK_CALLBACK_INVOKED`, `BACK_DISPATCH` (D-7 decision log), `HUD_TOGGLED`,
+`URL_ENTRY_ACCEPTED/IGNORED`, `TEST_URL_SELECTED`, `LOAD_URL`,
 `PAGE_STARTED/PAGE_FINISHED`, `RECEIVED_ERROR`, `WEB_GO_BACK/FORWARD`,
 `WEB_RELOAD`, `WEBVIEW_PROVIDER_NULL`, `WEBVIEW_UNAVAILABLE` (T-17),
 `WEBVIEW_CREATED` (constructor ms, T-18), `WEBVIEW_DESTROY`,
@@ -162,7 +230,10 @@ tools/logcat.sh
 `COLD_START_FIRST_FRAME` (T-18), `INPUT_DEVICE_ADDED/REMOVED/CHANGED`,
 `DISPLAY_ADDED/REMOVED/CHANGED`, `TRIM_MEMORY`, `SETTING_CHANGED`,
 `SAFE_BROWSING_APPLIED/TOGGLED`, `MARK`, `DEVICE_INFO_EXPORTED`, `EXPORT_ALL`,
-`SESSION_END`, `PREVIOUS_SESSION_DIED`, `STORAGE_FALLBACK`.
+`SESSION_END`, `PREVIOUS_SESSION_DIED`, `STORAGE_FALLBACK`,
+`ADB_HOOKS` (D-5, parsed extras), `ADB_SCREEN_OPENED`, `NAV_REQUEST`
+(`source=adb`), `NAV_REQUEST_IGNORED`, `ADB_ACTION_RESULT`, `APP_STOP`,
+`UNCAUGHT_EXCEPTION` (crash handler, with a bounded log flush).
 
 ---
 
@@ -192,8 +263,37 @@ Pinned in `gradle/libs.versions.toml` (checked against official release pages on
 
 ---
 
-## 8. M1 scope, known gaps and honesty notes
+## 8. M1 / M1.1 scope, known gaps and honesty notes
 
+* **M1.1 (this build, v0.1.1-m1.1)** fixes the Haier-device run findings
+  (`reports/W0/logs/M1/Haier_MatrixTV_CE/LEAD_ANALYSIS.md`):
+  D-1 TV-safe URL entry + focus order (initial focus on the first test URL),
+  D-2 dark tv-material theme with WCAG-AA-checked pairs, D-3 visible focus
+  (bright container + 2 dp light border + 1.05 scale), D-4 async log writer
+  (single thread, timestamps at call time, bounded flush on stop/export/crash),
+  D-5 adb hooks + `tools/run-m1.sh`, D-6 empty-Go no-op, D-7 `BACK_DISPATCH`
+  logging (see §5.1), H-7 README APK names + in-app multiprocess/renderer-PID.
+  H-6 (benchmark build) is **skipped** — founder decision F-H5 pending.
+* Emulator evidence for the D-fixes is produced by CI: the `emulator-acceptance`
+  job boots an API 34 TV image (system-images;android-34;android-tv;x86), runs
+  `tools/emulator-m1.1-checks.sh` (A1-A8) and uploads screenshots, UI dumps and
+  log excerpts as the workflow artifact `w0-harness-emulator-m1.1-<short-sha>`
+  (30-day retention). It is **emulator evidence only** — no
+  W0 test (T-xx/P-x) is marked PASS by it; device statuses come only from the
+  founder's runs.
+* **A4 WCAG AA contrast table** (D-2; computed by `util/ContrastTest`, which
+  asserts every pair ≥ 4.5:1 — verified green in CI):
+
+  | Pair | Colours | Ratio | AA (≥4.5:1) |
+  |---|---|---|---|
+  | onBackground on background (body text) | `#E6EDF5` on `#0E1116` | 16.03:1 | PASS |
+  | onSurface on surface (cards, HUD, rows) | `#E6EDF5` on `#1A2230` | 13.53:1 | PASS |
+  | mutedText on background (labels, notes) | `#9AA5B4` on `#0E1116` | 7.58:1 | PASS |
+  | mutedText on surface (secondary text on cards) | `#9AA5B4` on `#1A2230` | 6.40:1 | PASS |
+  | onFocusContainer on focusContainer (focused rows/buttons) | `#0B1220` on `#2684FF` | 5.20:1 | PASS |
+  | onPrimary on primary (primary-filled states) | `#FFFFFF` on `#1B5FD9` | 5.70:1 | PASS |
+  | onSurface on surfaceRaised (button labels, unfocused) | `#E6EDF5` on `#1D2733` | 12.80:1 | PASS |
+  | mutedText on surfaceRaised (muted button labels) | `#9AA5B4` on `#1D2733` | 6.05:1 | PASS |
 * **M2/M3 features are absent by design:** 2-live tab pool + standby modes,
   renderer-recovery triggers (`chrome://crash`), session restore, fullscreen
   video container, popup lab, service-worker probe/blocklist, Safe Browsing

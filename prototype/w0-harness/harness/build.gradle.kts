@@ -27,8 +27,8 @@ android {
         applicationId = "dev.tvbrowse.w0harness"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-m1"
+        versionCode = 2
+        versionName = "0.1.1-m1.1"
     }
 
     flavorDimensions.add("mode")
@@ -105,7 +105,6 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
-    implementation(libs.compose.material3)
     implementation(libs.tv.material)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

@@ -3,10 +3,12 @@ package dev.tvbrowse.w0harness
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import android.os.StrictMode
 import android.os.SystemClock
 import dev.tvbrowse.w0harness.app.AppState
 import dev.tvbrowse.w0harness.app.SettingsStore
 import dev.tvbrowse.w0harness.log.ExitMarker
+import dev.tvbrowse.w0harness.log.LogIo
 import dev.tvbrowse.w0harness.log.SessionLog
 import dev.tvbrowse.w0harness.util.jsonObject
 
@@ -16,9 +18,15 @@ import dev.tvbrowse.w0harness.util.jsonObject
  * Order matters for the unexpected-exit detector (§5.4):
  *  1. capture cold-start t0 (T-18),
  *  2. read the still-open `session_open` marker of the previous process (if any),
- *  3. init the session log (writes SESSION_HEADER),
+ *  3. init the session log (writes SESSION_HEADER via the LogIo thread),
  *  4. log PREVIOUS_SESSION_DIED + the last 50 lines of the dead session,
  *  5. write a fresh marker; cleared when the last activity finishes cleanly.
+ *
+ * M1.1 additions:
+ *  - StrictMode `detectDiskWrites` in debug (A6): the harness must show no
+ *    SessionLog disk-write violations on the main thread (D-4).
+ *  - A default uncaught-exception handler that logs the crash and flushes the
+ *    log writer synchronously (bounded wait) before delegating (D-4).
  */
 class HarnessApplication : Application() {
 
@@ -31,6 +39,10 @@ class HarnessApplication : Application() {
 
         override fun onActivityStopped(activity: Activity) {
             startedCount--
+            if (startedCount <= 0) {
+                SessionLog.log("APP_STOP", jsonObject("reason" to "no started activities; flushing log writer"))
+                LogIo.flushSync()
+            }
         }
 
         override fun onActivityDestroyed(activity: Activity) {
@@ -49,6 +61,17 @@ class HarnessApplication : Application() {
     override fun onCreate() {
         AppState.appStartElapsedMs = SystemClock.elapsedRealtime()
         super.onCreate()
+
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskWrites()
+                    .penaltyLog()
+                    .build(),
+            )
+        }
+
+        installCrashFlushHandler()
 
         val settings = SettingsStore(this)
         val previous = ExitMarker.readPrevious(this)
@@ -85,6 +108,25 @@ class HarnessApplication : Application() {
                 "buildTime" to BuildConfig.BUILD_TIME,
             ),
         )
+    }
+
+    /** D-4: log the crash and flush the writer (bounded <= 500 ms) before dying. */
+    private fun installCrashFlushHandler() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching {
+                SessionLog.log(
+                    "UNCAUGHT_EXCEPTION",
+                    jsonObject(
+                        "thread" to thread.name,
+                        "exceptionClass" to throwable.javaClass.name,
+                        "message" to (throwable.message ?: ""),
+                    ),
+                )
+                LogIo.flushSync(500)
+            }
+            previous?.uncaughtException(thread, throwable)
+        }
     }
 
     override fun onTrimMemory(level: Int) {
