@@ -34,12 +34,16 @@ class CrashLoopGuardTest {
     }
 
     @Test
-    fun `boundary - crash exactly at the window edge is outside`() {
+    fun `window edge - a crash exactly windowMs old stays counted`() {
         val guard = CrashLoopGuard(windowMs = 60_000, maxRecoveries = 2, now = { 0 })
         guard.recordAndDecide(0)
-        guard.recordAndDecide(60_000) // first is now older than the window (> windowMs)
-        guard.recordAndDecide(61_000)
-        assertEquals(CrashLoopGuard.Decision.RECOVER, guard.recordAndDecide(62_000))
+        // 60_000 - 0 == windowMs is NOT "> windowMs", so the first crash is still
+        // inside: two recoveries, exactly at the limit.
+        assertEquals(CrashLoopGuard.Decision.RECOVER, guard.recordAndDecide(60_000))
+        assertEquals(2, guard.crashesInWindow())
+        // 1 ms later the first crash left the window (61_000 - 0 > 60_000).
+        assertEquals(CrashLoopGuard.Decision.RECOVER, guard.recordAndDecide(60_001))
+        assertEquals(2, guard.crashesInWindow())
     }
 
     @Test
