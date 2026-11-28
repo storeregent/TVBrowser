@@ -51,38 +51,70 @@ fun BrowserScreen(pool: WebViewPool, onNavigateBack: () -> Unit) {
             HudBar(pool, onNavigateBack, hudFocusRequester)
         }
 
-        val error = AppState.webViewError
-        if (error != null) {
-            // T-17 / §5.10 error screen (also shown after a renderer exit in M1).
+        if (AppState.crashGuardTripped) {
+            // §5.4 crash-loop guard: D-pad-dismissible error page instead of recreating.
             Column(
                 Modifier.fillMaxSize().padding(32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text("WebView problem", fontSize = 24.sp)
-                Text(error, fontSize = 14.sp, color = HarnessColors.MutedText)
+                Text("Renderer crash guard", fontSize = 24.sp)
                 Text(
-                    "This is the WebView guard error screen (T-17). The app did not crash. " +
-                        "The details were written to the session log (WEBVIEW_UNAVAILABLE / RENDER_PROCESS_GONE).",
+                    AppState.crashGuardDetail ?: "The renderer exited repeatedly.",
+                    fontSize = 14.sp,
+                    color = HarnessColors.MutedText,
+                )
+                Text(
+                    "Recovery is paused so the crash loop cannot spin. The details were written to the " +
+                        "session log (CRASH_GUARD_TRIPPED).",
                     fontSize = 12.sp,
                     color = HarnessColors.MutedText,
                 )
-                TvButton(onClick = {
-                    AppState.webViewError = null
-                    AppState.screen = Screen.Home
-                }) { Text("Back to Home") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvButton(onClick = { pool.resetCrashGuard() }) { Text("Reset guard & retry") }
+                    TvButton(onClick = {
+                        pool.resetCrashGuard()
+                        AppState.screen = Screen.Home
+                    }) { Text("Back to Home") }
+                }
             }
         } else {
-            LaunchedEffect(Unit) {
-                val ok = pool.ensureCreated()
-                AppState.pendingUrl?.let { pending ->
-                    if (ok) pool.loadUrl(pending)
+            val error = AppState.webViewError
+            if (error != null) {
+                // T-17 / §5.10 error screen (WebView provider unavailable).
+                Column(
+                    Modifier.fillMaxSize().padding(32.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text("WebView problem", fontSize = 24.sp)
+                    Text(error, fontSize = 14.sp, color = HarnessColors.MutedText)
+                    Text(
+                        "This is the WebView guard error screen (T-17). The app did not crash. " +
+                            "The details were written to the session log (WEBVIEW_UNAVAILABLE / RENDER_PROCESS_GONE).",
+                        fontSize = 12.sp,
+                        color = HarnessColors.MutedText,
+                    )
+                    TvButton(onClick = {
+                        AppState.webViewError = null
+                        AppState.screen = Screen.Home
+                    }) { Text("Back to Home") }
                 }
-                AppState.pendingUrl = null
+            } else {
+                LaunchedEffect(Unit) {
+                    pool.ensureCreated()
+                }
+                // pendingUrl may arrive while the Browser screen is already
+                // composed (singleTask onNewIntent from an adb hook): observe it.
+                LaunchedEffect(AppState.pendingUrl) {
+                    AppState.pendingUrl?.let { pending ->
+                        pool.loadUrl(pending)
+                        AppState.pendingUrl = null
+                    }
+                }
+                AndroidView(
+                    factory = { pool.hostContainer },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
             }
-            AndroidView(
-                factory = { pool.hostContainer },
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
         }
     }
 }
@@ -99,9 +131,8 @@ private fun HudBar(pool: WebViewPool, onNavigateBack: () -> Unit, focusRequester
             TvButton(onClick = onNavigateBack, focusRequester = focusRequester) { Text("Back") }
             TvButton(onClick = { pool.goForward() }) { Text("Fwd") }
             TvButton(onClick = { pool.reload() }) { Text("Reload") }
-            // Tabs HUD element (§4.2). The live count is 1 in M1 (single WebView);
-            // the 2-live/10-stored tab manager arrives with M2 (§5.3).
-            Text("Tabs 1/10", fontSize = 14.sp, color = HarnessColors.MutedText)
+            // Tabs HUD element (§4.2): n/10 with the live instance count (M2 §5.3).
+            TvButton(onClick = { AppState.screen = Screen.Tabs }) { Text("Tabs ${AppState.tabCount}/10 · ${AppState.liveWebViewCount} live") }
             Spacer(Modifier.weight(1f))
             TvButton(onClick = {
                 AppState.hudVisible = false

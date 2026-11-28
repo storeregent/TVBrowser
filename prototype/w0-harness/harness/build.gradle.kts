@@ -27,8 +27,8 @@ android {
         applicationId = "dev.tvbrowse.w0harness"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1-m1.1"
+        versionCode = 3
+        versionName = "0.2.0-m2"
     }
 
     flavorDimensions.add("mode")
@@ -71,6 +71,26 @@ android {
             // Debug-only validation harness: release builds are not built in CI (brief §7).
             isMinifyEnabled = false
         }
+        // H-6 / F-H5 amendment (HARNESS_BRIEF §7): representative cold-start build for
+        // T-18. Non-debuggable, R8 on, profileable (src/benchmark/AndroidManifest.xml),
+        // `.bench` id suffix so it installs side by side, signed with the same CI debug
+        // key. Uploaded as a CI artifact only — no Play upload, no publishing.
+        create("benchmark") {
+            initWith(getByName("release"))
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            matchingFallbacks += listOf("release")
+            applicationIdSuffix = ".bench"
+            signingConfig = signingConfigs.findByName("w0hCiDebug") ?: signingConfigs.getByName("debug")
+        }
+    }
+
+    lint {
+        // benchmark initWith(release) would run lintVital and fail on unused-resource
+        // style issues from the release-like config; release builds are not produced.
+        checkReleaseBuilds = false
     }
 
     buildFeatures {

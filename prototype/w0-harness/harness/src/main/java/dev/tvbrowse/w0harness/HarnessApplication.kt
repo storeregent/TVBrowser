@@ -75,6 +75,7 @@ class HarnessApplication : Application() {
 
         val settings = SettingsStore(this)
         val previous = ExitMarker.readPrevious(this)
+        AppState.previousSessionDied = previous != null
 
         SessionLog.init(this, settings.activityVariant(), settings.snapshot())
 

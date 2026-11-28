@@ -129,6 +129,9 @@ navigate_to_url_entry() { # from initial focus: UP -> button row, LEFT x4 -> Dev
 fresh_launch() {
   adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
   sleep 2
+  # M2: the persisted tab state would raise a session-restore offer on these
+  # launches; these checks always want a clean Home.
+  adb shell rm -f "/sdcard/Android/data/$PKG/files/tabs-state.json" >/dev/null 2>&1 || true
   adb shell am start -n "$ACTIVITY" >/dev/null 2>&1 || true
   wait_boot_or_app
 }

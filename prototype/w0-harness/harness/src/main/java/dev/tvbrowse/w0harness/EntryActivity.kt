@@ -29,6 +29,7 @@ class EntryActivity : ComponentActivity() {
             AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
             AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
             AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
+            AdbExtras.KEY_VALUE to intent.getStringExtra(AdbExtras.KEY_VALUE),
             // `--ez w0h.locked` delivers a Boolean extra; `-e w0h.locked` a String. Accept both.
             AdbExtras.KEY_LOCKED to (intent.getStringExtra(AdbExtras.KEY_LOCKED)
                 ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString()),

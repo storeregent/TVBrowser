@@ -23,6 +23,7 @@ import dev.tvbrowse.w0harness.app.Screen
 import dev.tvbrowse.w0harness.app.SettingsStore
 import dev.tvbrowse.w0harness.log.SessionLog
 import dev.tvbrowse.w0harness.util.jsonObject
+import dev.tvbrowse.w0harness.web.StandbyMode
 import dev.tvbrowse.w0harness.web.WebViewPool
 
 /**
@@ -135,15 +136,30 @@ fun SettingsScreen(activity: android.app.Activity, settings: SettingsStore, pool
                 )
             }
             item {
+                var standbyLabel by remember { mutableStateOf(settings.standbyMode()) }
                 ListItem(
                     selected = false,
-                    onClick = { },
-                    enabled = false,
-                    colors = TvFocus.listItemColors(enabled = false),
-                    headlineContent = { Text("Standby mode (M2)") },
+                    onClick = {
+                        val next = when (standbyLabel) {
+                            "prewarm" -> "mru"
+                            "mru" -> "none"
+                            else -> "prewarm"
+                        }
+                        standbyLabel = next
+                        settings.setStandbyModeValue(next)
+                        pool.setStandbyMode(StandbyMode.fromId(next) ?: StandbyMode.PREWARM, trigger = "settings")
+                        SessionLog.log(
+                            "SETTING_CHANGED",
+                            jsonObject("key" to SettingsStore.KEY_STANDBY_MODE, "value" to next, "appliesOn" to "immediately (§5.3)"),
+                        )
+                    },
+                    colors = TvFocus.listItemColors(),
+                    scale = TvFocus.listItemScale(),
+                    border = TvFocus.listItemBorder(),
+                    headlineContent = { Text("Standby mode (T-05)") },
                     supportingContent = {
                         Text(
-                            "Current: ${settings.standbyMode()} — functional in M2 (§5.3)",
+                            "Current: $standbyLabel — prewarm = blank warm WebView, MRU = 2nd tab stays live, none = active only. (§5.3)",
                             fontSize = 11.sp,
                             color = LocalContentColor.current.copy(alpha = 0.75f),
                         )
@@ -167,15 +183,32 @@ fun SettingsScreen(activity: android.app.Activity, settings: SettingsStore, pool
                 )
             }
             item {
+                var guardWindow by remember { mutableStateOf(settings.crashGuardWindowSeconds()) }
                 ListItem(
                     selected = false,
-                    onClick = { },
-                    enabled = false,
-                    colors = TvFocus.listItemColors(enabled = false),
-                    headlineContent = { Text("Crash-guard window (M2)") },
+                    onClick = {
+                        guardWindow = when (guardWindow) {
+                            30 -> 60
+                            60 -> 120
+                            else -> 30
+                        }
+                        settings.setCrashGuardWindowSeconds(guardWindow)
+                        SessionLog.log(
+                            "SETTING_CHANGED",
+                            jsonObject(
+                                "key" to SettingsStore.KEY_CRASH_GUARD_WINDOW,
+                                "value" to guardWindow,
+                                "appliesOn" to "next crash sequence (guard window is read at pool start)",
+                            ),
+                        )
+                    },
+                    colors = TvFocus.listItemColors(),
+                    scale = TvFocus.listItemScale(),
+                    border = TvFocus.listItemBorder(),
+                    headlineContent = { Text("Crash-guard window") },
                     supportingContent = {
                         Text(
-                            "Current: ${settings.crashGuardWindowSeconds()}s — functional in M2 (§5.4)",
+                            "Current: ${guardWindow}s — max 2 renderer recoveries inside the window; the 3rd crash shows the error page (§5.4)",
                             fontSize = 11.sp,
                             color = LocalContentColor.current.copy(alpha = 0.75f),
                         )

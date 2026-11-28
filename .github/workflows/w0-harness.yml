@@ -1,9 +1,12 @@
-# W0 validation harness CI (brief §7; M1.1 adds the emulator acceptance job).
+# W0 validation harness CI (brief §7 + F-H5 amendment; M1.1 adds the emulator
+# acceptance job, M2 adds the B1-B8 checks and the benchmark build type).
 #
 # Job 1 (build): JVM unit tests + the two debug APKs (standard + alt flavors),
-#                uploaded as artifact w0-harness-<shortSHA> (30 days).
+#                uploaded as artifact w0-harness-<shortSHA> (30 days), plus the
+#                benchmark build type APKs (H-6/F-H5) as w0-harness-bench-<shortSHA>.
 # Job 2 (emulator-acceptance): boots an API 34 Android TV emulator, runs the
-#                M1.1 A1-A8 checks (tools/emulator-m1.1-checks.sh) and uploads
+#                M1.1 A1-A8 checks (tools/emulator-m1.1-checks.sh) and the M2
+#                B1-B8 checks (tools/emulator-m2-checks.sh), uploads
 #                screenshots/UI dumps/logs as w0-harness-emulator-m1.1-<shortSHA>.
 #                Emulator evidence only — never a W0 test status.
 #
@@ -11,8 +14,8 @@
 # exists it is decoded and used, so successive CI builds install over each
 # other. Without the secret the runner's default debug key is used and each new
 # CI build must be uninstalled before installing. Never commit a keystore.
-# No release builds, no Play upload, no publishing steps (H-6 benchmark build is
-# skipped pending founder decision F-H5).
+# No release builds, no Play upload, no publishing steps (the benchmark build
+# type is the F-H5-approved exception; CI artifact only).
 
 name: w0-harness
 
@@ -74,10 +77,10 @@ jobs:
             echo "No W0H_DEBUG_KEYSTORE_B64 secret: using the runner's default debug key (uninstall before each install)."
           fi
 
-      - name: Build (JVM unit tests + both flavor debug APKs)
+      - name: Build (JVM unit tests + debug APKs + benchmark APKs)
         run: |
           set -o pipefail
-          ./gradlew --no-daemon testStandardDebugUnitTest testAltDebugUnitTest assembleStandardDebug assembleAltDebug --stacktrace 2>&1 | tee gradle-output.log
+          ./gradlew --no-daemon testStandardDebugUnitTest testAltDebugUnitTest assembleStandardDebug assembleAltDebug assembleStandardBenchmark assembleAltBenchmark --stacktrace 2>&1 | tee gradle-output.log
 
       - name: Publish gradle output tail to job summary (debug aid)
         if: always()
@@ -108,6 +111,16 @@ jobs:
           path: |
             prototype/w0-harness/harness/build/outputs/apk/standard/debug/*.apk
             prototype/w0-harness/harness/build/outputs/apk/alt/debug/*.apk
+
+      - name: Upload benchmark APKs as workflow artifact (H-6 / F-H5)
+        uses: actions/upload-artifact@v4
+        with:
+          name: w0-harness-bench-${{ steps.sha.outputs.short }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            prototype/w0-harness/harness/build/outputs/apk/standard/benchmark/*.apk
+            prototype/w0-harness/harness/build/outputs/apk/alt/benchmark/*.apk
 
   emulator-acceptance:
     name: Emulator A1-A8 checks (API 34 TV)
@@ -154,7 +167,9 @@ jobs:
           script: |
             adb install -r prototype/w0-harness/harness/build/outputs/apk/standard/debug/harness-standard-debug.apk
             adb install -r prototype/w0-harness/harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "(alt install failed; standard checks continue)"
-            cd prototype/w0-harness && tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
+            cd prototype/w0-harness
+            tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
+            tools/emulator-m2-checks.sh dev.tvbrowse.w0harness acceptance-out-m2
 
       - name: Report check failures as annotations
         if: failure()
@@ -175,6 +190,16 @@ jobs:
             fi
           done
           echo "::error::log-markers:$S"
+          S2=""
+          for f in b1-tab-open.txt b2-tab-switch.txt b3-crash.txt b4-terminate.txt b5-crash-guard.txt b6-standby.txt b6-mru-live.txt b6-none.txt b7-restored.txt b8-fullscreen.txt b8-fullscreen-hide.txt; do
+            if [ -f "acceptance-out-m2/$f" ]; then
+              M="$(grep -oE "TAB_OPENED|TAB_SWITCH_COMPLETE|RENDER_PROCESS_GONE|RECOVERY_COMPLETE|CRASH_GUARD_TRIPPED|STANDBY_MODE_SET|WEBVIEW_DESTROY|RESTORE_APPLIED|FULLSCREEN_SHOW|FULLSCREEN_HIDE" "acceptance-out-m2/$f" | sort | uniq -c | awk '{printf "%s:%s ", $2, $1}')"
+              S2="$S2 [$f]${M:-none}"
+            else
+              S2="$S2 [$f]MISSING"
+            fi
+          done
+          echo "::error::m2-markers:$S2"
           if [ -f acceptance-out/a2-focus-traversal.txt ]; then
             echo "::error::[a2] $(grep -v '^A2' acceptance-out/a2-focus-traversal.txt | tr '\n' ' ' | head -c 600)"
           fi
@@ -185,9 +210,11 @@ jobs:
       - name: Publish check summary
         if: always()
         run: |
-          if [ -f acceptance-out/SUMMARY.md ]; then
-            cat acceptance-out/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for d in acceptance-out acceptance-out-m2; do
+            if [ -f "$d/SUMMARY.md" ]; then
+              cat "$d/SUMMARY.md" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload emulator evidence as workflow artifact
         if: always()
@@ -198,3 +225,4 @@ jobs:
           if-no-files-found: warn
           path: |
             prototype/w0-harness/acceptance-out/
+            prototype/w0-harness/acceptance-out-m2/

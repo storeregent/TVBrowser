@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<!--
+  W0 harness M2 fullscreen trigger page (brief §5.2 / AA D-gap-09).
+  Served locally from the appassets.androidplatform.net/assets/ origin
+  (WebViewAssetLoader) — no network. The button is the first focusable element,
+  so D-pad focus + OK calls requestFullscreen() with a real user gesture; the
+  WebView must then route it to onShowCustomView (FULLSCREEN_SHOW log line).
+  BACK hides the custom view (FULLSCREEN_HIDE).
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { background: #0E1116; color: #E6EDF5; font-family: sans-serif; padding: 24px; }
+    button { font-size: 24px; padding: 16px 32px; background: #1B5FD9; color: #FFFFFF; border: 0; }
+    #fsbox { background: #2684FF; color: #0B1220; font-size: 28px; }
+  </style>
+  <title>M2 fullscreen trigger</title>
+</head>
+<body>
+  <h1>M2 fullscreen trigger (local)</h1>
+  <p>Focus this button with the D-pad and press OK:</p>
+  <button id="fsbtn" onclick="enterFs()">Go fullscreen</button>
+  <div id="fsbox">
+    <p>This box goes fullscreen (onShowCustomView). Press BACK to exit.</p>
+  </div>
+  <script>
+    function enterFs() {
+      console.log("M2_FULLSCREEN_REQUESTED");
+      var el = document.getElementById("fsbox");
+      var fn = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (fn) {
+        fn.call(el).catch(function (e) { console.log("M2_FULLSCREEN_ERROR " + e); });
+      } else {
+        console.log("M2_FULLSCREEN_UNSUPPORTED");
+      }
+    }
+    document.addEventListener("fullscreenchange", function () {
+      console.log("M2_FULLSCREEN_CHANGE " + (document.fullscreenElement ? "enter" : "exit"));
+    });
+  </script>
+</body>
+</html>

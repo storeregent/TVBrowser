@@ -39,12 +39,13 @@ fun HarnessRoot(
             }
         }
         when (AppState.screen) {
-            Screen.Home -> HomeScreen(activity, settings)
+            Screen.Home -> HomeScreen(activity, settings, pool)
             Screen.Browser -> BrowserScreen(pool, onNavigateBack)
+            Screen.Tabs -> TabsScreen(pool)
             Screen.DeviceInfo -> DeviceInfoScreen(activity)
             Screen.Logs -> LogsScreen(activity)
             Screen.Settings -> SettingsScreen(activity, settings, pool)
-            Screen.Tests -> TestsScreen()
+            Screen.Tests -> TestsScreen(pool, settings)
         }
     }
 }

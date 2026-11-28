@@ -33,8 +33,10 @@ class AdbExtrasTest {
     }
 
     @Test
-    fun `w0h screen accepts all five names case-insensitively`() {
+    fun `w0h screen accepts all seven names case-insensitively`() {
         assertEquals(Screen.Home, AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "home")).screen)
+        assertEquals(Screen.Browser, AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "Browser")).screen)
+        assertEquals(Screen.Tabs, AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "tabs")).screen)
         assertEquals(Screen.DeviceInfo, AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "DeviceInfo")).screen)
         assertEquals(Screen.Logs, AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "LOGS")).screen)
         assertEquals(Screen.Settings, AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "settings")).screen)
@@ -43,20 +45,39 @@ class AdbExtrasTest {
 
     @Test
     fun `unknown screen value is reported as ignored`() {
-        val parsed = AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "browser"))
+        val parsed = AdbExtras.parse(mapOf(AdbExtras.KEY_SCREEN to "nowhere"))
         assertNull(parsed.screen)
         assertTrue(parsed.hasAny)
         assertEquals(listOf(AdbExtras.KEY_SCREEN), parsed.ignored)
     }
 
     @Test
-    fun `w0h action accepts the three actions`() {
+    fun `w0h action accepts the M1 actions`() {
         assertEquals(
             AdbAction.EXPORT_DEVICEINFO,
             AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "export_deviceinfo")).action,
         )
         assertEquals(AdbAction.EXPORT_ALL, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "EXPORT_ALL")).action)
         assertEquals(AdbAction.MARK_STEP, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "mark_step")).action)
+    }
+
+    @Test
+    fun `w0h action accepts the M2 triggers`() {
+        assertEquals(AdbAction.OPEN_TAB, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "open_tab")).action)
+        assertEquals(AdbAction.SWITCH_TAB, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "SWITCH_TAB")).action)
+        assertEquals(AdbAction.CRASH_ACTIVE, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "crash_active")).action)
+        assertEquals(AdbAction.TERMINATE_RENDERER, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "terminate_renderer")).action)
+        assertEquals(AdbAction.SET_STANDBY, AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "set_standby")).action)
+    }
+
+    @Test
+    fun `w0h value carries switch and standby arguments`() {
+        val switch = AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "switch_tab", AdbExtras.KEY_VALUE to "2"))
+        assertEquals(AdbAction.SWITCH_TAB, switch.action)
+        assertEquals("2", switch.value)
+        val standby = AdbExtras.parse(mapOf(AdbExtras.KEY_ACTION to "set_standby", AdbExtras.KEY_VALUE to "mru"))
+        assertEquals(AdbAction.SET_STANDBY, standby.action)
+        assertEquals("mru", standby.value)
     }
 
     @Test

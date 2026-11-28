@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.View
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -29,6 +31,7 @@ import dev.tvbrowse.w0harness.ui.HarnessRoot
 import dev.tvbrowse.w0harness.util.ConfigurationDiff
 import dev.tvbrowse.w0harness.util.UrlNormalizer
 import dev.tvbrowse.w0harness.util.jsonObject
+import dev.tvbrowse.w0harness.web.StandbyMode
 import dev.tvbrowse.w0harness.web.WebViewPool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -49,6 +52,9 @@ abstract class BrowserActivityBase : ComponentActivity() {
         private set
     protected lateinit var settings: SettingsStore
         private set
+
+    /** Set by [applyAdbLaunchCommands]; suppresses the session-restore offer (§5.5). */
+    private var launchHadAdbHooks = false
 
     protected abstract val activityVariant: String
 
@@ -82,10 +88,9 @@ abstract class BrowserActivityBase : ComponentActivity() {
             },
         )
         registerInputAndDisplayListeners()
-        setContent {
-            HarnessRoot(activity = this, pool = pool, settings = settings, onNavigateBack = ::navigateBack)
-        }
+        setupContent()
         applyAdbLaunchCommands()
+        offerRestoreIfAppropriate()
     }
 
     override fun onDestroy() {
@@ -103,7 +108,59 @@ abstract class BrowserActivityBase : ComponentActivity() {
     override fun onStop() {
         SessionLog.log("ACTIVITY_STOP", jsonObject("variant" to activityVariant))
         super.onStop()
+        pool.onActivityStopped() // M2 §5.3: global pauseTimers + CookieManager.flush (C-15)
         LogIo.flushSync()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        pool.onActivityResumed() // M2 §5.3: resumeTimers (global)
+    }
+
+    // ------------------------------------------------------------------ fullscreen container (§5.2/AA D-gap-09)
+
+    private lateinit var fullscreenOverlay: FrameLayout
+    private var fullscreenCallback: android.webkit.WebChromeClient.CustomViewCallback? = null
+
+    private val isFullscreenShowing: Boolean
+        get() = ::fullscreenOverlay.isInitialized && fullscreenOverlay.visibility == View.VISIBLE
+
+    /**
+     * The activity root is a plain FrameLayout: the ComposeView plus a
+     * full-window overlay container for WebView custom views (video/element
+     * fullscreen) OUTSIDE the Compose tree (AA D-gap-09).
+     */
+    private fun setupContent() {
+        val root = FrameLayout(this)
+        val compose = androidx.compose.ui.platform.ComposeView(this).apply {
+            setContent { HarnessRoot(activity = this@BrowserActivityBase, pool = pool, settings = settings, onNavigateBack = ::navigateBack) }
+        }
+        root.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        fullscreenOverlay = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(android.graphics.Color.BLACK)
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        root.addView(fullscreenOverlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        setContentView(root)
+        pool.fullscreenHost = object : WebViewPool.FullscreenHost {
+            override fun enterFullscreen(view: View, callback: android.webkit.WebChromeClient.CustomViewCallback) {
+                fullscreenCallback = callback
+                fullscreenOverlay.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+                fullscreenOverlay.visibility = View.VISIBLE
+                fullscreenOverlay.requestFocus()
+            }
+
+            override fun exitFullscreen(): Boolean {
+                if (!isFullscreenShowing) return false
+                fullscreenOverlay.removeAllViews()
+                fullscreenOverlay.visibility = View.GONE
+                runCatching { fullscreenCallback?.onCustomViewHidden() }
+                fullscreenCallback = null
+                return true
+            }
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -144,6 +201,11 @@ abstract class BrowserActivityBase : ComponentActivity() {
             AppState.backCallbackInvocations++
             val canGoBack = pool.currentWebView?.canGoBack()
             when {
+                isFullscreenShowing -> {
+                    // §5.2 M2: Back exits fullscreen video first (D-gap-09).
+                    logBackDispatch(canGoBack, "fullscreen_exit")
+                    pool.fullscreenHost?.exitFullscreen()
+                }
                 AppState.screen == Screen.Browser && canGoBack == true -> {
                     logBackDispatch(canGoBack, "webview_history")
                     pool.handleBack()
@@ -178,6 +240,7 @@ abstract class BrowserActivityBase : ComponentActivity() {
     /** Shared back semantics kept for the HUD Back button. */
     private fun navigateBack() {
         when {
+            isFullscreenShowing -> pool.fullscreenHost?.exitFullscreen()
             AppState.screen == Screen.Browser && pool.handleBack() -> Unit
             AppState.screen != Screen.Home -> AppState.screen = Screen.Home
             else -> finish() // clean exit clears the session_open marker
@@ -187,16 +250,19 @@ abstract class BrowserActivityBase : ComponentActivity() {
     // ------------------------------------------------------------------ adb launch hooks (D-5)
 
     private fun applyAdbLaunchCommands() {
+        launchHadAdbHooks = false
         val extras: Map<String, String?> = mapOf(
             AdbExtras.KEY_URL to intent.getStringExtra(AdbExtras.KEY_URL),
             AdbExtras.KEY_SCREEN to intent.getStringExtra(AdbExtras.KEY_SCREEN),
             AdbExtras.KEY_ACTION to intent.getStringExtra(AdbExtras.KEY_ACTION),
             AdbExtras.KEY_LABEL to intent.getStringExtra(AdbExtras.KEY_LABEL),
+            AdbExtras.KEY_VALUE to intent.getStringExtra(AdbExtras.KEY_VALUE),
             AdbExtras.KEY_LOCKED to (intent.getStringExtra(AdbExtras.KEY_LOCKED)
                 ?: intent.extras?.get(AdbExtras.KEY_LOCKED)?.toString()),
         )
         val adb = AdbExtras.parse(extras)
         if (!adb.hasAny) return
+        launchHadAdbHooks = true
         SessionLog.log(
             "ADB_HOOKS",
             jsonObject(
@@ -247,8 +313,57 @@ abstract class BrowserActivityBase : ComponentActivity() {
                     AppState.screen = Screen.Logs
                     performExportAll()
                 }
+                // ---------------------------------------------------------------- M2 triggers (§5.3/§5.4)
+                AdbAction.OPEN_TAB -> {
+                    val normalized = adb.url?.let { UrlNormalizer.normalize(it) }
+                    if (adb.url != null && normalized == null) {
+                        SessionLog.log("ADB_HOOKS_IGNORED", jsonObject("key" to AdbExtras.KEY_URL, "reason" to "does not parse as a URL"))
+                    }
+                    pool.openTab(normalized)
+                    AppState.screen = Screen.Browser
+                    SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "open_tab", "tabs" to pool.manager.tabCount))
+                }
+                AdbAction.SWITCH_TAB -> {
+                    val id = adb.value?.toIntOrNull()
+                    if (id != null && pool.switchTo(id, trigger = "adb")) {
+                        AppState.screen = Screen.Browser
+                        SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "switch_tab", "tabId" to id))
+                    } else {
+                        SessionLog.log("ADB_HOOKS_IGNORED", jsonObject("key" to AdbExtras.KEY_VALUE, "reason" to "switch_tab needs a valid tab id"))
+                    }
+                }
+                AdbAction.CRASH_ACTIVE -> {
+                    AppState.screen = Screen.Browser
+                    pool.triggerCrashInActive()
+                    SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "crash_active"))
+                }
+                AdbAction.TERMINATE_RENDERER -> {
+                    AppState.screen = Screen.Browser
+                    pool.terminateActiveRenderer()
+                    SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "terminate_renderer"))
+                }
+                AdbAction.SET_STANDBY -> {
+                    val mode = StandbyMode.fromId(adb.value)
+                    if (mode != null) {
+                        pool.setStandbyMode(mode, trigger = "adb")
+                        SessionLog.log("ADB_ACTION_RESULT", jsonObject("action" to "set_standby", "mode" to mode.id))
+                    } else {
+                        SessionLog.log(
+                            "ADB_HOOKS_IGNORED",
+                            jsonObject("key" to AdbExtras.KEY_VALUE, "reason" to "set_standby needs prewarm|mru|none"),
+                        )
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * §5.5: on a cold start with persisted tab state (and an unclean previous
+     * exit, and no adb hooks that steer this launch), offer "Restore session".
+     */
+    private fun offerRestoreIfAppropriate() {
+        pool.offerRestoreAsync { !launchHadAdbHooks && AppState.previousSessionDied }
     }
 
     private fun performExportDeviceinfo() {

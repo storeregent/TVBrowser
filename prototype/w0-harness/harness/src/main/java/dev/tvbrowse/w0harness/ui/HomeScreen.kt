@@ -1,12 +1,15 @@
 package dev.tvbrowse.w0harness.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
@@ -21,11 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.tvbrowse.w0harness.BuildConfig
 import dev.tvbrowse.w0harness.app.AppState
@@ -35,6 +40,7 @@ import dev.tvbrowse.w0harness.info.TestUrls
 import dev.tvbrowse.w0harness.log.SessionLog
 import dev.tvbrowse.w0harness.util.UrlNormalizer
 import dev.tvbrowse.w0harness.util.jsonObject
+import dev.tvbrowse.w0harness.web.WebViewPool
 
 /**
  * Home (brief §4.1, M1.1 D-1/D-2/D-6).
@@ -48,7 +54,7 @@ import dev.tvbrowse.w0harness.util.jsonObject
  *    Tests, Mark step) → Test URL list; Up returns in reverse.
  */
 @Composable
-fun HomeScreen(activity: android.app.Activity, settings: SettingsStore) {
+fun HomeScreen(activity: android.app.Activity, settings: SettingsStore, pool: WebViewPool) {
     var urlInput by rememberSaveable { mutableStateOf("") }
     var editing by rememberSaveable { mutableStateOf(false) }
     var inputError by rememberSaveable { mutableStateOf("") }
@@ -206,5 +212,63 @@ fun HomeScreen(activity: android.app.Activity, settings: SettingsStore) {
 
     if (showMarkDialog) {
         MarkStepDialog(onDismiss = { showMarkDialog = false })
+    }
+
+    AppState.restoreOffer?.let { offer ->
+        RestoreSessionDialog(
+            offer = offer,
+            onRestore = {
+                pool.restoreSession() // §5.5: rebuilds tabs, opens Browser
+            },
+            onStartFresh = {
+                pool.discardPersistedSession()
+            },
+        )
+    }
+}
+
+/**
+ * §5.5: D-pad-dismissible "Restore session?" offer after a process death.
+ * Enter on Restore rebuilds the app-owned tab state; Start fresh clears it.
+ */
+@Composable
+private fun RestoreSessionDialog(
+    offer: AppState.RestoreOffer,
+    onRestore: () -> Unit,
+    onStartFresh: () -> Unit,
+) {
+    BackHandler(enabled = true) {
+        SessionLog.log("RESTORE_OFFER_DISMISSED", jsonObject("via" to "back_key"))
+        AppState.restoreOffer = null
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            onClick = {},
+            colors = TvFocus.surfaceColors(),
+            scale = TvFocus.surfaceScale(),
+            border = TvFocus.surfaceBorder(),
+        ) {
+            Column(
+                Modifier.padding(24.dp).widthIn(min = 480.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Restore session?", fontSize = 20.sp)
+                Text(
+                    "${offer.tabCount} tab(s) were saved before the last session ended. " +
+                        "Last active tab: ${offer.activeUrl ?: "(blank)"}.",
+                    fontSize = 13.sp,
+                    color = LocalContentColor.current.copy(alpha = 0.85f),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvButton(onClick = onRestore) { Text("Restore") }
+                    TvButton(onClick = onStartFresh) { Text("Start fresh") }
+                }
+            }
+        }
     }
 }

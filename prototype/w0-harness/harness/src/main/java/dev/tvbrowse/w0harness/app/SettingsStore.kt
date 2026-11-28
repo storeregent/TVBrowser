@@ -34,9 +34,15 @@ class SettingsStore(context: Context) {
 
     fun standbyMode(): String = prefs.getString(KEY_STANDBY_MODE, "prewarm") ?: "prewarm" // M2 (§5.3)
 
+    /** M2: persists the T-05 standby mode (prewarm | mru | none). */
+    fun setStandbyModeValue(value: String) = prefs.edit().putString(KEY_STANDBY_MODE, value).apply()
+
     fun popupPolicy(): Int = prefs.getInt(KEY_POPUP_POLICY, 1) // M3 (§5.6)
 
     fun crashGuardWindowSeconds(): Int = prefs.getInt(KEY_CRASH_GUARD_WINDOW, 60) // M2 (§5.4)
+
+    /** M2: persists the crash-guard window (§5.4). Applies to new crash sequences. */
+    fun setCrashGuardWindowSeconds(value: Int) = prefs.edit().putInt(KEY_CRASH_GUARD_WINDOW, value).apply()
 
     fun cursorEnabled(): Boolean = prefs.getBoolean(KEY_CURSOR_ENABLED, false) // M3 (§5.9)
 
