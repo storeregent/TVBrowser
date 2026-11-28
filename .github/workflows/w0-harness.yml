@@ -161,13 +161,38 @@ jobs:
         working-directory: prototype/w0-harness
         run: |
           if [ -f acceptance-out/SUMMARY.md ]; then
-            grep -nE "FAIL|ERROR|BLOCKED" acceptance-out/SUMMARY.md | cut -c1-900 | head -8 | while IFS= read -r line; do
+            grep -nE "FAIL|ERROR|BLOCKED" acceptance-out/SUMMARY.md | cut -c1-500 | head -8 | while IFS= read -r line; do
               echo "::error::$line"
             done
           fi
-          find acceptance-out -maxdepth 1 -type f 2>/dev/null | head -3 | while IFS= read -r f; do
-            echo "::error::evidence-file: $f"
+          for f in a2-focus-traversal.txt a5-hook-url.txt a5-hook-export-info.txt a3-logcat.txt; do
+            if [ -f "acceptance-out/$f" ]; then
+              echo "::error::[$f] $(head -c 800 "acceptance-out/$f" | tr '\n' ' ')"
+            else
+              echo "::error::[$f] MISSING"
+            fi
           done
+          for x in a3_before_ok a3_edit_mode; do
+            if [ -f "acceptance-out/$x.xml" ]; then
+              echo "::error::[$x] $(python3 - "acceptance-out/$x.xml" <<'PY' 2>/dev/null
+          import sys, xml.etree.ElementTree as ET
+          try:
+              tree = ET.parse(sys.argv[1])
+          except Exception:
+              print("unparsable"); raise SystemExit
+          n = [e for e in tree.iter('node') if e.get('focused') == 'true']
+          if n:
+              e = n[0]
+              print("focused:", (e.get('text') or e.get('content-desc') or ''), e.get('class'))
+          else:
+              print("no focused node")
+          PY
+          )"
+            fi
+          done
+          if [ -f acceptance-out/crash-buffer.txt ]; then
+            grep -m1 -A 6 "FATAL" acceptance-out/crash-buffer.txt | head -c 900 | tr '\n' ' ' | { IFS= read -r l; echo "::error::[crash] $l"; } || true
+          fi
 
       - name: Publish check summary
         if: always()

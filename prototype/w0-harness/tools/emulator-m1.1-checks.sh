@@ -101,8 +101,11 @@ IME_SHOWN="$(adb shell dumpsys input_method 2>/dev/null | grep -c 'mInputShown=t
 [ "$IME_SHOWN" = "0" ]; check "A1" "fresh launch: IME not open (mInputShown=$IME_SHOWN)" $?
 [ "$FOCUSED_CLASS" != "android.widget.EditText" ] && [ "$FOCUSED_CLASS" != "androidx.compose.ui.platform.ComposeView" ]; check "A1" "initial focus is a non-text element (focused: '$FOCUSED_TEXT' class=$FOCUSED_CLASS)" $?
 
+  # A2: record the pre-keypress initial focus as step0 (Example.com coverage).
+  dumpui a2_step0
 # ================================================================= A2: D-pad traversal coverage
-declare -a VISITED=()
+dumpui a2_step0
+VISITED=("$(focused_node "$OUT/a2_step0.xml")") # step0 = initial focus (Example.com)
 KEYS=(19 21 21 21 21 19 22 20 20) # UP, LEFT x4, UP, RIGHT, DOWN, DOWN
 STEP=0
 for key in "${KEYS[@]}"; do
@@ -115,7 +118,8 @@ for key in "${KEYS[@]}"; do
   shot "a2_step$STEP"
 done
 { echo "A2 traversal (key -> focusedText|focusedClass):"
-  for i in "${!VISITED[@]}"; do echo "  step$((i+1)): ${VISITED[$i]}"; done
+  echo "  step0 (initial): ${VISITED[0]}"
+  for i in "${!KEYS[@]}"; do echo "  step$((i + 1)): ${VISITED[$((i + 1))]}"; done
 } > "$OUT/a2-focus-traversal.txt"
 COVERAGE_BAD=0
 for want in "Go" "Device Info" "Logs" "Settings" "Tests" "Mark step" "Example.com"; do
@@ -173,8 +177,9 @@ check "A5" "am start -e w0h.url -> NAV_REQUEST (source=adb)" $?
 adb shell am start -n "$ACTIVITY" -e w0h.screen tests >/dev/null 2>&1 || true
 sleep 3
 dumpui a5_screen_tests
-grep -q "Tests" "$OUT/a5_screen_tests.xml" 2>/dev/null
-check "A5" "am start -e w0h.screen tests -> Tests screen" $?
+logcat_dump "$OUT/a5-screen-logcat.txt"
+grep -q "ADB_SCREEN_OPENED" "$OUT/a5-screen-logcat.txt" && grep -q '"screen":"Tests"' "$OUT/a5-screen-logcat.txt"
+check "A5" "am start -e w0h.screen tests -> Tests screen (ADB_SCREEN_OPENED)" $?
 
 adb shell am start -n "$ACTIVITY" -e w0h.action export_deviceinfo >/dev/null 2>&1 || true
 sleep 8
@@ -235,6 +240,7 @@ check "A7" "Back at Home falls through to the system: process exited (pid='$PID_
 
 # ================================================================= evidence bundle: pull session logs
 adb pull "/sdcard/Android/data/$PKG/files/w0logs/" "$OUT/w0logs/" >/dev/null 2>&1 || true
+adb logcat -d -b crash > "$OUT/crash-buffer.txt" 2>/dev/null || true
 
 note ""
 note "Checks passed: $PASS, failed: $FAIL"

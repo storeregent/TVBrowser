@@ -1,6 +1,7 @@
 package dev.tvbrowse.w0harness
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.hardware.display.DisplayManager
 import android.hardware.input.InputManager
@@ -117,6 +118,18 @@ abstract class BrowserActivityBase : ComponentActivity() {
             ),
         )
         lastConfigFields = newFields
+    }
+
+    /**
+     * D-5: the browser activity is `singleTask`, so an `am start` on the launcher
+     * while the app is alive arrives here as `onNewIntent` (forwarded by
+     * EntryActivity). Re-apply the adb launch hooks against the new extras.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        SessionLog.log("ACTIVITY_NEW_INTENT", jsonObject("variant" to activityVariant))
+        applyAdbLaunchCommands()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
