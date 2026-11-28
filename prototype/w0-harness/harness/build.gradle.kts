@@ -1,3 +1,7 @@
+import com.android.build.api.variant.BuildConfigField
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,7 +17,7 @@ val gitSha: String = runCatching {
     process.inputStream.bufferedReader().readText().trim().take(7).ifBlank { "unknown" }.also { process.waitFor() }
 }.getOrDefault("unknown")
 
-val buildTime: String = java.time.OffsetDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+val buildTime: String = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
 android {
     namespace = "dev.tvbrowse.w0harness"
@@ -78,9 +82,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
 
-    buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
-    buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
+// AGP 9 new DSL: build info goes in via the variant API (buildConfigField DSL was removed).
+androidComponents {
+    onVariants { variant ->
+        variant.buildConfigFields.put("GIT_SHA", BuildConfigField("String", "\"$gitSha\"", null))
+        variant.buildConfigFields.put("BUILD_TIME", BuildConfigField("String", "\"$buildTime\"", null))
+    }
 }
 
 kotlin {
