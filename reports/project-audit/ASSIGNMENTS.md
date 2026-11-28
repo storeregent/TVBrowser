@@ -1,65 +1,64 @@
 # Project Audit — Lead Orchestrator Assignment Record
 
 **Project:** TVBrowse / TVBrowser · **Stage:** W0 validation (W1 blocked) · **Task:** PROJECT AUDIT ONLY
-**Lead Orchestrator date:** 2026-11-27 · **Branch:** `arena/55acd7be-tvbrowser` (base `1660e6a`)
+**Date:** 2026-11-27 · **Base commit for all audit branches:** `main` @ `1660e6a`
 
 ---
 
-## 1. How this audit was run (please read)
+## 1. How the audit was run
 
-This session had **no separate multi-agent runtime**. The four specialist audits were run **one after another, each in its own role, inside the same Lead session**. Each pass:
+Four specialist agents ran **independently**. Each agent worked on its own branch and opened its own pull request. The Lead Orchestrator then reviewed the four reports, spot-checked key claims against official sources, and consolidated them into `PROJECT_AUDIT.md`.
 
-- stayed inside its scope (§3),
-- wrote **only** its own report file (§2),
-- used the AGENTS.md evidence labels (PASS / FAIL / BLOCKED / NOT TESTED / UNVERIFIED),
-- did **not** edit any existing project file.
+| Role | Branch | PR | Report file (sole owner) |
+|---|---|---|---|
+| Lead Orchestrator | `arena/55acd7be-tvbrowser` | #1 | `reports/project-audit/ASSIGNMENTS.md`, `reports/project-audit/PROJECT_AUDIT.md` |
+| Agent 1 — Product & Documentation | `arena/b6b27ea4-tvbrowser` | #2 | `reports/project-audit/PRODUCT_AUDIT.md` |
+| Agent 2 — Android Architecture | `arena/88e7e745-tvbrowser` | #3 | `reports/project-audit/ANDROID_ARCHITECTURE_AUDIT.md` |
+| Agent 4 — Market, Competitor & Policy | `arena/f98e882b-tvbrowser` | #4 | `reports/project-audit/MARKET_POLICY_AUDIT.md` |
+| Agent 3 — QA & W0 Validation | `arena/e66a9a89-tvbrowser` | #5 | `reports/project-audit/QA_VALIDATION_AUDIT.md` |
 
-**Limitation:** the four reports were not written by independent reviewers, so they do not cross-check each other the way separate agents would. If the founder wants a truly independent second opinion, the same briefs (§3) can be given to four separate agents. Their reports could then be compared with these.
+**Ownership check (Lead, 2026-11-27).** Each agent PR adds exactly one new file and modifies nothing else. No two PRs touch the same file. GitHub reports all five PRs as mergeable.
+
+**History note.** Before the agent reports existed, the Lead drafted provisional specialist passes itself (`AGENT1…AGENT4_*.md`, commit `065f67d`). They duplicated the real reports, so they were removed from this PR. They are still available in git history. Lead-only findings that are still valid are carried in `PROJECT_AUDIT.md` with the label **Lead**.
 
 ---
 
-## 2. File ownership (no two roles share a file)
+## 2. Read/write rules given to all roles
 
-| Role | Owns (write) | Reads (only) |
+| Role | Writes | Reads |
 |---|---|---|
-| Lead Orchestrator | `reports/project-audit/ASSIGNMENTS.md`, `reports/project-audit/PROJECT_AUDIT.md` | everything |
-| Agent 1 — Product & Documentation | `reports/project-audit/AGENT1_PRODUCT_DOCS_AUDIT.md` | `AGENTS.md`, `README.md`, `docs/**`, `reference/**` |
-| Agent 2 — Android Architecture | `reports/project-audit/AGENT2_ANDROID_ARCHITECTURE_AUDIT.md` | `docs/technical/**`, `docs/product/**` (§0, §2, §4), `reference/browsehere/**`, official Android docs |
-| Agent 3 — QA & W0 Validation | `reports/project-audit/AGENT3_QA_W0_VALIDATION_AUDIT.md` | `docs/validation/**`, `docs/research/procurement-and-sources.md`, `prototype/`, `tests/`, `reports/W0/` |
-| Agent 4 — Market, Competitor & Policy | `reports/project-audit/AGENT4_MARKET_COMPETITOR_POLICY_AUDIT.md` | `docs/product/**` (§3, §5, §9–§11), `docs/research/**`, public official sources |
+| Lead Orchestrator | `ASSIGNMENTS.md`, `PROJECT_AUDIT.md` | everything, including the agent reports |
+| Product & Documentation | `PRODUCT_AUDIT.md` | `AGENTS.md`, `README.md`, `docs/**`, `reference/**` |
+| Android Architecture | `ANDROID_ARCHITECTURE_AUDIT.md` | `docs/technical/**`, `docs/product/**`, `docs/validation/**`, `reference/browsehere/**`, official Android docs |
+| QA & W0 Validation | `QA_VALIDATION_AUDIT.md` | `docs/validation/**`, `docs/research/**`, `docs/product/**`, `docs/technical/**`, `prototype/`, `tests/`, `reports/W0/` |
+| Market, Competitor & Policy | `MARKET_POLICY_AUDIT.md` | `docs/product/**`, `docs/research/**`, `reference/**`, public official sources |
 
-**Read-only for every role:** `docs/product/PRD_v1.2.md`, `docs/technical/TECH_SPEC_v1.2.md`, `docs/validation/*`, `docs/research/*`, `AGENTS.md`, `README.md`. **No role may fill in `docs/validation/validation-results.md`**, because filling it in counts as starting W0, and W0 needs founder approval.
+**Read-only for every role:** `docs/product/PRD_v1.2.md`, `docs/technical/TECH_SPEC_v1.2.md`, `docs/validation/*`, `docs/research/*`, `AGENTS.md`, `README.md`.
+
+**No role may fill in `docs/validation/validation-results.md`.** Filling it in counts as starting W0, and W0 needs founder approval.
 
 ---
 
-## 3. Briefs
+## 3. Briefs (scope boundaries)
 
-### Agent 1 — Product & Documentation Audit
-- **In scope:** whether the documents agree with each other; references and file paths; whether requirement counts and roadmap allocation match; what approval state the documents are in; open product decisions; missing documents.
-- **Out of scope:** whether the Android design is technically feasible (Agent 2), how good the test protocols are (Agent 3), external facts and competitor claims (Agent 4).
-- **Output:** inventory, list of document contradictions with exact references, list of gaps.
-
-### Agent 2 — Android Architecture Audit
-- **In scope:** whether the TECH_SPEC FRs, NFRs, ADRs (D-01…D-13), the §4 permission allow-list and the §5 security baseline are technically feasible and consistent with each other; Android API constraints; how realistic the memory/performance targets are; architecture gaps that must be closed before W1.
-- **Out of scope:** product priorities, competitor facts, protocol design. No code, no prototype.
-- **Output:** technical findings and a technical risk list, each with an evidence label.
-
-### Agent 3 — QA & W0 Validation Audit
-- **In scope:** whether W0 can actually be executed: assumptions A-01…A-33, protocols P1…P10, gates D-1…D-4, devices and tools, evidence paths, status vocabulary, pass/fail criteria, timeline.
-- **Out of scope:** checking external policy facts (Agent 4), judging the architecture (Agent 2). **Must not execute W0 or record any result.**
-- **Output:** readiness matrix per track, protocol and gate, plus blockers and the missing inputs.
-
-### Agent 4 — Market, Competitor & Policy Audit
-- **In scope:** checking competitor claims (TV Bro v3), the six differentiator hypotheses (desk view only), store and platform policy claims, the three "unverifiable" claims in Validation Plan §4, licensing (filter lists, TV Bro), and the waitlist/landing-page policy.
-- **Out of scope:** technical feasibility, test design. **Must not record D-1 verdicts or fill in W0 artifacts.** Findings are desk evidence for the audit only.
-- **Output:** verified / contradicted / UNVERIFIED claims with source URLs and access dates.
+| Role | In scope | Out of scope |
+|---|---|---|
+| Product & Documentation | Document consistency, references and paths, requirement counts and roadmap allocation, approval state, acceptance-criteria quality, open product decisions | Android feasibility, protocol quality, external market facts |
+| Android Architecture | Feasibility and internal consistency of FRs, NFRs, ADRs, the §4 permissions and the §5 security baseline; Android/WebView API constraints; memory and lifecycle; missing technical decisions; extra W0 experiments | Product priorities, competitor facts. No code, no prototype |
+| QA & W0 Validation | Coverage of assumptions A-01…A-33 by protocols P1…P10, gates, device and tool needs, reproducibility, acceptance criteria, evidence packets, status vocabulary | External policy facts, architecture. **No test execution, no results** |
+| Market, Competitor & Policy | Competitors (TV Bro, BrowseHere, others), the six differentiators (desk view only), Google Play / Google TV / Amazon policy, licences, privacy and distribution | Technical feasibility, test design. **No D-1 verdicts, no W0 artifacts** |
 
 ---
 
 ## 4. Rules given to all roles
 
-1. Do not modify the PRD, TECH_SPEC, or any validation/research document.
+1. Do not modify the PRD, TECH_SPEC, or any validation or research document.
 2. Do not write production or prototype code.
 3. Do not invent test, device, performance, user or competitor results. Desk evidence must be labelled as desk evidence.
-4. Every finding must have a reference (file:line or URL) or an explicit UNVERIFIED label.
+4. Every finding needs a reference (file:line or URL) or an explicit UNVERIFIED label.
 5. Finish with the AGENTS.md §9 Task Completion Report and stop.
+
+**Compliance:** the Lead's review is in `PROJECT_AUDIT.md` §0.
+- All four agents complied with rules 1–4.
+- The Product report ends with "Awaiting Lead" but has no §9 table.
+- The Market report uses PASS/FAIL for desk verdicts (errata E-4).
