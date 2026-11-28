@@ -274,8 +274,11 @@ Pinned in `gradle/libs.versions.toml` (checked against official release pages on
   D-5 adb hooks + `tools/run-m1.sh`, D-6 empty-Go no-op, D-7 `BACK_DISPATCH`
   logging (see §5.1), H-7 README APK names + in-app multiprocess/renderer-PID.
   H-6 (benchmark build) is **skipped** — founder decision F-H5 pending.
-* Emulator evidence for the D-fixes lives in `docs/m1.1-emulator/` (API 34 TV
-  image, CI job `emulator-acceptance`). It is **emulator evidence only** — no
+* Emulator evidence for the D-fixes is produced by CI: the `emulator-acceptance`
+  job boots an API 34 TV image (system-images;android-34;android-tv;x86), runs
+  `tools/emulator-m1.1-checks.sh` (A1-A8) and uploads screenshots, UI dumps and
+  log excerpts as the workflow artifact `w0-harness-emulator-m1.1-<short-sha>`
+  (30-day retention). It is **emulator evidence only** — no
   W0 test (T-xx/P-x) is marked PASS by it; device statuses come only from the
   founder's runs.
 * **M2/M3 features are absent by design:** 2-live tab pool + standby modes,

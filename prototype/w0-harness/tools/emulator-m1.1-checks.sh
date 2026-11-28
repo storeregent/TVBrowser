@@ -2,7 +2,7 @@
 # W0 harness tools (M1.1): A1-A8 acceptance checks on a booted API 34 TV emulator.
 #
 # Preconditions:
-#   - an Android TV emulator (system-images;android-34;android-tv;x86_64 or newer)
+#   - an Android TV emulator (system-images;android-34;android-tv;x86 or newer)
 #     is booted and reachable via adb,
 #   - the standard flavor APK is installed,
 #   - python3 is available (UI-dump parsing).
