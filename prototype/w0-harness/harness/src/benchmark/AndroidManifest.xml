@@ -1,9 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- H-6 / F-H5: the benchmark build type is profileable so `am start -W` and
-         simpleperf/macrobenchmark-style shell profiling see real cold-start work. -->
-    <profileable
-        android:shell="true"
-        tools:targetApi="29" />
+    <application>
+        <!-- H-6 / F-H5: the benchmark build type is profileable so `am start -W` and
+             simpleperf/macrobenchmark-style shell profiling see real cold-start work. -->
+        <profileable
+            android:shell="true"
+            tools:targetApi="29" />
+    </application>
 </manifest>
