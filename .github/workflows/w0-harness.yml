@@ -156,6 +156,19 @@ jobs:
             adb install -r prototype/w0-harness/harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "(alt install failed; standard checks continue)"
             cd prototype/w0-harness && tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
 
+      - name: Report check failures as annotations
+        if: failure()
+        working-directory: prototype/w0-harness
+        run: |
+          if [ -f acceptance-out/SUMMARY.md ]; then
+            grep -nE "FAIL|ERROR|BLOCKED" acceptance-out/SUMMARY.md | cut -c1-900 | head -8 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
+          find acceptance-out -maxdepth 1 -type f 2>/dev/null | head -3 | while IFS= read -r f; do
+            echo "::error::evidence-file: $f"
+          done
+
       - name: Publish check summary
         if: always()
         run: |
