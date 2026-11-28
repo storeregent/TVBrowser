@@ -160,16 +160,37 @@ a2_label() { # dump now, print focused label
   echo "${F%%|*}"
 }
 a2_press() { adb shell input keyevent "$1" >/dev/null 2>&1 || true; sleep 1; }
+a2_walk() { # a2_walk <keyevent> <max>: press key until the focused label repeats (edge reached)
+  local key="$1" max="$2" prev="" cur=""
+  for _ in $(seq 1 "$max"); do
+    a2_press "$key"
+    cur="$(a2_label)"
+    VISITED+=("$cur")
+    if [ "$cur" = "$prev" ]; then break; fi
+    prev="$cur"
+  done
+}
 dumpui a2_step0
 VISITED=("$(a2_label)") # step0 = initial focus (first test URL)
-a2_press 19; VISITED+=("$(a2_label)")               # UP -> button row
-for _ in 1 2 3 4; do a2_press 22; VISITED+=("$(a2_label)"); done  # RIGHT x4 -> right end
-for _ in 1 2 3 4; do a2_press 21; VISITED+=("$(a2_label)"); done  # LEFT x4 -> left end (full row)
-a2_press 19; TOP1="$(a2_label)"; VISITED+=("$TOP1") # UP -> top row (URL entry or Go)
-if [ "$TOP1" = "URL" ]; then a2_press 22; else a2_press 21; fi
-VISITED+=("$(a2_label)")                            # the other top-row control
-a2_press 20; VISITED+=("$(a2_label)")               # DOWN -> button row
-a2_press 20; VISITED+=("$(a2_label)")               # DOWN -> test URL list
+a2_press 19; VISITED+=("$(a2_label)")  # UP -> button row
+a2_walk 22 6                           # RIGHT to the row edge
+a2_walk 21 8                           # LEFT to the row edge (passes every button)
+CUR="$(a2_label)"
+case "$CUR" in
+  URL|Go)
+    # LEFT jumped up to the top row already; visit the other top-row control
+    if [ "$CUR" = "URL" ]; then a2_press 22; else a2_press 21; fi
+    VISITED+=("$(a2_label)")
+    ;;
+  *)
+    a2_press 19                        # UP -> top row (URL entry or Go)
+    TOP1="$(a2_label)"; VISITED+=("$TOP1")
+    if [ "$TOP1" = "URL" ]; then a2_press 22; else a2_press 21; fi
+    VISITED+=("$(a2_label)")           # the other top-row control
+    ;;
+esac
+a2_press 20; VISITED+=("$(a2_label)")  # DOWN -> button row
+a2_press 20; VISITED+=("$(a2_label)")  # DOWN -> test URL list
 { echo "A2 traversal (adaptive walk, focusedText|focusedClass):"
   for i in "${!VISITED[@]}"; do echo "  step$i: ${VISITED[$i]}"; done
 } > "$OUT/a2-focus-traversal.txt"
@@ -203,21 +224,23 @@ logcat_dump "$OUT/a3-logcat.txt"
 grep -q "LOAD_URL" "$OUT/a3-logcat.txt" && grep -qi "example.com" "$OUT/a3-logcat.txt"
 check "A3" "IME Done commits and loads the URL (LOAD_URL in log)" $?
 
-# ... then edit mode + DPAD_DOWN leaves WITHOUT loading. On a TV the open IME
-# may consume D-pad keys itself; in that case BACK is the other D-1 exit path
-# (BackHandler), so fall back to it when the focused node is still the field.
+# ... then edit mode exits WITHOUT loading. On a TV the open IME window may
+# consume D-pad AND Back itself (founder's R-11 trap). Both exit paths log
+# url_edit_exit, so: BACK first (system closes the IME, or the app's
+# BackHandler exits editing); if the field is still focused, the IME ate the
+# key and D-pad Down now reaches the app's interceptor.
 adb logcat -c >/dev/null 2>&1 || true
 fresh_launch || true
 sleep 2
 navigate_to_url_entry
-adb shell input keyevent 23 >/dev/null 2>&1 || true   # OK -> edit mode
+adb shell input keyevent 23 >/dev/null 2>&1 || true   # OK -> edit mode + IME
 sleep 2
-adb shell input keyevent 20 >/dev/null 2>&1 || true   # DPAD_DOWN -> exit edit, no load
+adb shell input keyevent 4 >/dev/null 2>&1 || true    # BACK: closes IME (system) or exits edit (app)
 sleep 2
 dumpui a3_down_probe
 PD="$(focused_node "$OUT/a3_down_probe.xml")"; PD="${PD##*|}"
 if [ "$PD" = "android.widget.EditText" ]; then
-  adb shell input keyevent 4 >/dev/null 2>&1 || true  # BACK -> exit edit (IME ate the D-pad)
+  adb shell input keyevent 20 >/dev/null 2>&1 || true # IME ate BACK -> D-pad Down reaches the app interceptor now
   sleep 2
 fi
 shot a3_down_exit
@@ -226,8 +249,7 @@ F="$(focused_node "$OUT/a3_down_exit.xml")"; FC="${F##*|}"
 logcat_dump "$OUT/a3-down-logcat.txt"
 EXIT_LOGGED=0
 grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt" && EXIT_LOGGED=1
-{ [ "$FC" != "android.widget.EditText" ] || [ "$EXIT_LOGGED" = "1" ]; }
-check "A3" "edit mode exits without committing (D-pad Down, or Back when the IME consumes D-pad; focused class=$FC, exit-logged=$EXIT_LOGGED)" $?
+[ "$FC" != "android.widget.EditText" ]; check "A3" "edit mode exits without committing (focused class=$FC, exit-logged=$EXIT_LOGGED)" $?
 grep -q "LOAD_URL" "$OUT/a3-down-logcat.txt"; [ $? -ne 0 ]; check "A3" "Down-exit does NOT load a page" $?
 grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt"; check "A3" "BACK_DISPATCH/exit logged (handledBy=url_edit_exit path)" $?
 
