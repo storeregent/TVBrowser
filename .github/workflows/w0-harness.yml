@@ -204,8 +204,18 @@ jobs:
           if [ -f acceptance-out/a2-focus-traversal.txt ]; then
             echo "::error::[a2] $(grep -v '^A2' acceptance-out/a2-focus-traversal.txt | tr '\n' ' ' | head -c 600)"
           fi
+          echo "::error::[m1.1-summary] $(grep -E '^- \[' acceptance-out/SUMMARY.md 2>/dev/null | tr '\n' '|' | head -c 1100)"
+          if [ -f acceptance-out-m2/SUMMARY.md ]; then
+            echo "::error::[m2-summary] $(grep -E '^- \[' acceptance-out-m2/SUMMARY.md | tr '\n' '|' | head -c 1100)"
+          fi
+          for f in a7-am-start.txt a7-back.txt; do
+            [ -f "acceptance-out/$f" ] && echo "::error::[$f] $(head -c 400 "acceptance-out/$f" | tr '\n' ' ')"
+          done
+          for f in b1-tab-open.txt b3-crash.txt; do
+            [ -f "acceptance-out-m2/$f" ] && echo "::error::[m2-$f] $(head -c 400 "acceptance-out-m2/$f" | tr '\n' ' ')"
+          done
           if [ -f acceptance-out/crash-buffer.txt ]; then
-            grep -m1 -A 5 "FATAL" acceptance-out/crash-buffer.txt | head -c 850 | tr '\n' ' ' | { IFS= read -r l; echo "::error::[crash] $l"; } || true
+            echo "::error::[crash] $(head -c 500 acceptance-out/crash-buffer.txt | tr '\n' ' ')"
           fi
 
       - name: Publish check summary

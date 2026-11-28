@@ -322,7 +322,7 @@ note "  - full StrictMode excerpt: a6-strictmode.txt (harness-related violations
 adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
 sleep 2
 adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -n "$ACTIVITY" >/dev/null 2>&1 || true
+adb shell am start -n "$ACTIVITY" > "$OUT/a7-am-start.txt" 2>&1 || true
 sleep 10
 adb shell input keyevent 4 >/dev/null 2>&1 || true   # BACK at Home
 PID_GONE=0
