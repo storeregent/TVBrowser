@@ -141,79 +141,20 @@ jobs:
       - name: Build standard debug APK
         run: ./gradlew --no-daemon assembleStandardDebug
 
-      - name: Install TV system image (API 34)
-        run: |
-          set -o pipefail
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null | grep -iE "system-images;android-3[0-9];android-tv" | head -20 | tee tv-images-available.txt || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          # API 34 TV images ship as 32-bit x86 (see e.g. android-tv CI setups).
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "system-images;android-34;android-tv;x86" 2>&1 | tee sdkmanager-install.log
-          test -d "$ANDROID_HOME/system-images/android-34/android-tv/x86"
-
-      - name: Report sdkmanager failure (diagnostics)
-        if: failure()
-        run: |
-          {
-            echo '### sdkmanager diagnostics'
-            echo '```text'
-            tail -n 60 sdkmanager-install.log 2>/dev/null || true
-            echo '--- available TV images ---'
-            cat tv-images-available.txt 2>/dev/null || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          tail -n 40 sdkmanager-install.log 2>/dev/null | head -n 6 | while IFS= read -r line; do
-            echo "::error::${line:0:950}"
-          done
-
-      - name: Create AVD
-        run: |
-          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
-          mkdir -p "$ANDROID_AVD_HOME"
-          # Keep avdmanager and the emulator on the same AVD home (the emulator
-          # searches $ANDROID_AVD_HOME first).
-          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
-          echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d tv_1080p -p "$ANDROID_AVD_HOME/tv34" \
-            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -p "$ANDROID_AVD_HOME/tv34" \
-            || echo no | "$AVDMANAGER" create avd -n tv34 -k "system-images;android-34;android-tv;x86" -d pixel -p "$ANDROID_AVD_HOME/tv34"
-          ls -la "$ANDROID_AVD_HOME"
-
-      - name: Boot emulator (background)
-        run: |
-          adb start-server || true
-          "$ANDROID_HOME/emulator/emulator" -avd tv34 \
-            -no-window -no-audio -gpu swiftshader_indirect -no-boot-anim -accel on \
-            -no-snapshot -wipe-data -no-metrics > emulator-boot.log 2>&1 &
-
-      - name: Wait for boot
-        run: |
-          adb wait-for-device || true
-          for i in $(seq 1 240); do
-            BOOTED="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-            if [ "$BOOTED" = "1" ]; then echo "boot completed after ~$((i * 5))s"; exit 0; fi
-            if [ $((i % 24)) = "0" ]; then echo "still booting (${BOOTED:-no answer}) ..."; fi
-            sleep 5
-          done
-          {
-            echo '### Emulator boot diagnostics'
-            echo '```text'
-            echo '--- adb devices ---'; adb devices -l 2>&1 || true
-            echo '--- emulator-boot.log tail ---'
-            tail -n 80 emulator-boot.log 2>/dev/null || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          tail -n 30 emulator-boot.log 2>/dev/null | tail -n 6 | while IFS= read -r line; do
-            echo "::error::boot: ${line:0:950}"
-          done
-          exit 1
-
-      - name: Install APKs
-        run: |
-          adb install -r harness/build/outputs/apk/standard/debug/harness-standard-debug.apk
-          adb install -r harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "(alt install failed; standard checks continue)"
-
-      - name: Run A1-A8 acceptance checks
-        run: tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
+      - name: Run A1-A8 acceptance checks on API 34 TV emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          avd-name: tv34
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-boot-timeout: 1200
+          script: |
+            adb install -r prototype/w0-harness/harness/build/outputs/apk/standard/debug/harness-standard-debug.apk
+            adb install -r prototype/w0-harness/harness/build/outputs/apk/alt/debug/harness-alt-debug.apk || echo "(alt install failed; standard checks continue)"
+            cd prototype/w0-harness && tools/emulator-m1.1-checks.sh dev.tvbrowse.w0harness acceptance-out
 
       - name: Publish check summary
         if: always()
