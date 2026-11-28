@@ -85,6 +85,7 @@ object TvFocus {
 
     fun listItemScale() = ListItemDefaults.scale(focusedScale = 1.05f)
 
+    @Composable
     fun listItemBorder() = ListItemDefaults.border(
         border = Border(border = BorderStroke(1.dp, HarnessColors.BorderUnfocused)),
         focusedBorder = Border(border = BorderStroke(2.dp, HarnessColors.BorderFocused)),
