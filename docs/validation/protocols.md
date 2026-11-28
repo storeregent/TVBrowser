@@ -12,13 +12,39 @@
 4. Repeat with USB/Bluetooth mouse connect/disconnect.
 **Pass for FR-14:** 0/10 video drops. **Agar recreate na ho** → A-01 ❌ aur FR-14 ko "defensive only" karke W5 se hatayein / re-scope.
 
-## P2 — Ad-block baseline (A-05, A-26, FR-21)
-**Primary benchmark = d3ward AdBlock Test (%)**; canyoublockit sirf qualitative notes.
+## P2 — Ad-block baseline (A-05, A-26, FR-21) — **PROPOSAL · PENDING FOUNDER APPROVAL**
+> **STATUS (current): BLOCKED.** d3ward AdBlock Test (`d3ward.github.io/toolz/adblock.html`) is archived and returns no score — confirmed across 3 M1 runs on Haier MatrixTV CE (see `reports/W0/logs/M1/Haier_MatrixTV_CE_cb73e80/FOUNDER_REPORT.md` §6, issue **I-2**). **No ad-block % claims are permitted until the founder approves the replacement below.**
+>
+> **Founder conflict to resolve (do NOT edit PRD/TECH_SPEC here):** `PRD_v1.2.md` and `TECH_SPEC_v1.2.md` FR-21 mandate *"ek hi benchmark = d3ward AdBlock Test (%), KPI ≥70%"*. d3ward is dead, so that KPI is currently unmeasurable. Approving a replacement below implies the founder also re-baselines the KPI source. PRD/TECH_SPEC edits are owned by product/tech lead, not QA.
+
+**Proposed PRIMARY benchmark — `adblocktest.pages.dev` (Turtlecute33/adblocktest)**
+- **Live?** ✅ Yes — repo active (latest commit 13 Nov 2026; README updated Aug 2026). Static site on Cloudflare/GitHub Pages.
+- **Numeric score?** ✅ Yes — one-click test returns a **percentage** ("percentage of connections blocked") with a liquid score ball + color bands (red/amber/green). Three categories: Cosmetic Filter, Script Loading, Host — same shape as d3ward.
+- **Android TV WebView?** ✅ Yes — pure client-side static page; the score is derived from whether probe connections / script loads are blocked (d3ward's exact mechanism). Requires JS on. Caveat (per site FAQ): some setups can skew results; the WebView must allow connection-failure detection (no aggressive mixed-content / safe-browsing interference). Same plain-WebView reference flow already used in M1.
+- **License / terms:** Source `github.com/Turtlecute33/adblocktest` is a **fork of `d3ward/toolz`** (177 commits ahead of `d3ward:toolz:master`). **Licensed CC BY-NC-SA 4.0** (same as upstream d3ward). Free + open-source. No ToS page imposes usage restrictions beyond the CC license; results are computed locally, nothing is uploaded. Minor monetization: a static "sponsorship" box only (run-time ad creatives removed in the Nov 2026 cleanup).
+- **Why primary:** it *is* d3ward's test, kept online — lowest-friction, highest-faithfulness replacement; preserves the "one numeric % per run" format the plan/PRD expect.
+
+**Proposed SECONDARY / cross-check benchmark — `adblocktester.pages.dev` (KristopherKubicki/adblock-tester)**
+- **Live?** ✅ Yes — live Pages deployment; generates local runs (observed 94% / 175-of-186 blocked).
+- **Numeric score?** ✅ Yes — **% + X-of-Y** (e.g. "94% · 175/186 Blocked"), grouped by service & category (Core ad networks, Programmatic/RTB, Analytics/telemetry, Social pixels, plus local script/cosmetic bait). Broader than d3ward (186 probes incl. trackers + analytics + social). JSON export of run history.
+- **Android TV WebView?** ✅ Yes — fully client-side; every request listed Blocked/Not-blocked; nothing uploaded. Larger domain set is heavier on a low-RAM TV WebView but still loads.
+- **License / terms:** Source `github.com/KristopherKubicki/adblock-tester` — **MIT License** (permissive). Curated against EasyList / EasyPrivacy / AdGuard DNS filter intelligence. No ToS restrictions; results local.
+- **Why secondary:** independent, broader coverage and an X-of-Y count that complements the primary %; good for catching per-category gaps. Use as a confirmatory cross-check, not the headline KPI.
+
+**Rejected / not proposed (for the record):**
+- `adblock-tester.com` (the /100 site, "v3.1.1", 11 services/22 checks) — live & numeric, **but affiliate-monetized (Total Adblock referral links)** → undisclosed commercial bias; not suitable as a neutral QA benchmark. (Its ToS at adblock-testers.com states results are "informational only, not a measure of effectiveness.")
+- `canyoublockit.com` — live but **qualitative / pass-fail** (Simple / eXtreme / Advanced), no single numeric %. Keep only as the optional qualitative secondary already named in FR-21 — not a score source.
+- `blockads.fivefilters.org` — live but **boolean** (blocking enabled / partial / none), no numeric %. Open-source (FiveFilters) but not a score source.
+- `d3ward.github.io` — **archived / dead**, no score. (The reason for this proposal.)
+
+**Proposed protocol (mechanics unchanged from prior P2; swap the URL):**
 1. Same device, same network, desktop UA, JS on, whitelist off, fresh profile.
-2. Apps: BrowseHere, TV Bro (current Play/GitHub build), aur ek plain WebView reference.
-3. **3 runs each**; score + screenshot + variance log.
-4. Note: kis test category me fail hua (network / cosmetic / popup / first-party).
-**Record:** BrowseHere ___/___/___ · TV Bro ___/___/___ · variance ___. **Koi "95%" claim nahi.**
+2. Apps: BrowseHere, TV Bro (pinned Play/GitHub build versions), + one plain WebView reference (harness blocklist **OFF** = plain-WebView reference, per `prototype/HARNESS_BRIEF.md` §5.7).
+3. **3 runs each** on **both** proposed URLs; record score + screenshot + variance log.
+4. Note failing categories (network / cosmetic / popup / first-party / per-service) from the site's own breakdown.
+5. Raw logs + screenshots → `W0/logs/` (evidence root, F-12); path in `validation-results.md` Section B.
+**Record:** BrowseHere ___/___/___ · TV Bro ___/___/___ · plain-WebView ___/___/___ · variance ___. **Koi "95%" claim nahi** until founder approves and a real measured baseline exists.
+**Founder decision required:** (a) approve primary `adblocktest.pages.dev` and/or secondary `adblocktester.pages.dev`; (b) re-baseline the ≥70% KPI source in PRD/TECH_SPEC (out of QA scope); (c) confirm whether the plain-WebView reference or the app builds is the headline number.
 
 ## P3 — 30-min scripted LMK session (NFR-01, NFR-06, FR-12)
 **Devices:** 1GB device + 2GB baseline. Capture `dumpsys meminfo <pkg>` (ALL PIDs incl. `:webview`/renderer) + `gfxinfo` + `logcat ActivityManager`.
