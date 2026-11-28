@@ -30,11 +30,14 @@ object LogIo {
         runCatching { executor.execute(block) }
     }
 
-    /** Waits until all queued work is done; false on timeout or shutdown. */
-    fun flushSync(timeoutMs: Long = 500): Boolean = try {
-        executor.submit {}.get(timeoutMs, TimeUnit.MILLISECONDS)
-        true
-    } catch (_: Exception) {
-        false
+    /**
+     * Waits (bounded) until all work queued so far has been written.
+     * A barrier task runs behind everything already queued; the latch counts
+     * down when the barrier itself executes. Returns false on timeout.
+     */
+    fun flushSync(timeoutMs: Long = 500): Boolean {
+        val barrier = java.util.concurrent.CountDownLatch(1)
+        execute { barrier.countDown() }
+        return runCatching { barrier.await(timeoutMs, TimeUnit.MILLISECONDS) }.getOrDefault(false)
     }
 }

@@ -1,6 +1,7 @@
 package dev.tvbrowse.w0harness.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -12,7 +13,6 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
-import androidx.tv.material3.RowScope
 
 /**
  * Focus-visible defaults for every interactive element (M1.1 D-3):
