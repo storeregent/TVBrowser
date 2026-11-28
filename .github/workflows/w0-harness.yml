@@ -89,9 +89,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # Emit key failure lines as ::error:: annotations (readable via the API).
           {
-            grep -nE "FAILURE:|What went wrong|Caused by:|error:|^e: |Exception|BUILD FAILED|> Task .* FAILED" "$LOG" 2>/dev/null | tail -n 6
-            echo '--- tail ---'
-            tail -n 10 "$LOG" 2>/dev/null
+            grep -E "^e: file:" "$LOG" 2>/dev/null | head -n 8
+            grep -E "FAILURE:|What went wrong|> Task .* FAILED" "$LOG" 2>/dev/null | head -n 2
           } | head -n 10 | while IFS= read -r line; do
             echo "::error::${line:0:1000}"
           done
