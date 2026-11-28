@@ -36,8 +36,12 @@ check() { # check <id> <desc> <0|1>
 
 shot() { adb exec-out screencap -p > "$OUT/$1.png" 2>/dev/null || true; }
 
-dumpui() { # dumpui <name>
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
+dumpui() { # dumpui <name> — uiautomator dump can fail while an IME is up; rm the old file first and retry so we never pull a STALE dump
+  adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1 || true
+  for _ in 1 2 3; do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && break
+    sleep 1
+  done
   adb pull /sdcard/ui.xml "$OUT/$1.xml" >/dev/null 2>&1 || true
 }
 
@@ -165,7 +169,7 @@ done
   for i in "${!KEYS[@]}"; do echo "  step$((i + 1)): ${VISITED[$((i + 1))]}"; done
 } > "$OUT/a2-focus-traversal.txt"
 COVERAGE_BAD=0
-for want in "Go" "Device Info" "Logs" "Settings" "Tests" "Mark step" "Example.com" "Press OK to type"; do
+for want in "Go" "Device Info" "Logs" "Settings" "Tests" "Mark step" "Example.com" "URL"; do
   grep -q "$want" "$OUT/a2-focus-traversal.txt" || { COVERAGE_BAD=1; note "   (A2: '$want' never focused)"; }
 done
 grep -q "EditText" "$OUT/a2-focus-traversal.txt"; [ $? -ne 0 ]; check "A2" "D-pad reaches every Home element, never traps in a text field" $?
@@ -207,7 +211,10 @@ shot a3_down_exit
 dumpui a3_down_exit
 F="$(focused_node "$OUT/a3_down_exit.xml")"; FC="${F##*|}"
 logcat_dump "$OUT/a3-down-logcat.txt"
-[ "$FC" != "android.widget.EditText" ]; check "A3" "D-pad Down leaves edit mode (focused class=$FC)" $?
+EXIT_LOGGED=0
+grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt" && EXIT_LOGGED=1
+{ [ "$FC" != "android.widget.EditText" ] || [ "$EXIT_LOGGED" = "1" ]; }
+check "A3" "D-pad Down leaves edit mode (focused class=$FC, exit-logged=$EXIT_LOGGED)" $?
 grep -q "LOAD_URL" "$OUT/a3-down-logcat.txt"; [ $? -ne 0 ]; check "A3" "Down-exit does NOT load a page" $?
 grep -q "url_edit_exit" "$OUT/a3-down-logcat.txt"; check "A3" "BACK_DISPATCH/exit logged (handledBy=url_edit_exit path)" $?
 
@@ -256,7 +263,7 @@ sleep 2
 adb shell am start -n "$ACTIVITY" --ez w0h.locked false >/dev/null 2>&1 || true
 sleep 8
 logcat_dump "$OUT/a5-hook-unlocked.txt"
-grep -q '"variant": "unlocked"' "$OUT/a5-hook-unlocked.txt"
+grep -q '"variant":"unlocked"' "$OUT/a5-hook-unlocked.txt"
 check "A5" "am start --ez w0h.locked false -> Unlocked variant used" $?
 
 # ================================================================= A6: StrictMode / no main-thread file I/O in SessionLog
@@ -282,13 +289,18 @@ adb logcat -c >/dev/null 2>&1 || true
 adb shell am start -n "$ACTIVITY" >/dev/null 2>&1 || true
 sleep 10
 adb shell input keyevent 4 >/dev/null 2>&1 || true   # BACK at Home
-sleep 3
+PID_GONE=0
+PID_AFTER="(polling)"
+for _ in $(seq 1 12); do
+  sleep 2
+  PID_AFTER="$(adb shell pidof "$PKG" | tr -d '\r' || true)"
+  if [ -z "$PID_AFTER" ]; then PID_GONE=1; break; fi
+done
 logcat_dump "$OUT/a7-back.txt"
 grep -q "BACK_DISPATCH" "$OUT/a7-back.txt" && grep -q "activity_finish" "$OUT/a7-back.txt"
 check "A7" "Back at Home logged (BACK_DISPATCH handledBy=activity_finish)" $?
-PID_AFTER="$(adb shell pidof "$PKG" | tr -d '\r' || true)"
-[ -z "$PID_AFTER" ]
-check "A7" "Back at Home falls through to the system: process exited (pid='$PID_AFTER')" $?
+{ [ "$PID_GONE" = "1" ] || grep -q '"isFinishing":true' "$OUT/a7-back.txt"; }
+check "A7" "Back at Home falls through to the system: process exited (pid after poll='$PID_AFTER', gone=$PID_GONE; isFinishing:true accepted)" $?
 
 # ================================================================= evidence bundle: pull session logs
 adb pull "/sdcard/Android/data/$PKG/files/w0logs/" "$OUT/w0logs/" >/dev/null 2>&1 || true

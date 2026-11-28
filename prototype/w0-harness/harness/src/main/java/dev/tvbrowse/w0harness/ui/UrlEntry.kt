@@ -16,8 +16,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,13 +58,19 @@ fun TvTextEntryRow(
     editFieldFocusRequester: FocusRequester? = null,
 ) {
     // Intercepts D-pad Up/Down BEFORE the inner text field can consume them (D-1).
+    // Only while editing, and only for KeyDown: the KeyUp of the same press must
+    // not exit again, and outside edit mode the row must pass D-pad through.
     val editKeyHandler: (KeyEvent) -> Boolean = { event ->
-        when (event.key) {
-            Key.DirectionDown, Key.DirectionUp -> {
-                onExitEdit()
-                true
+        if (editing && event.type == KeyEventType.KeyDown) {
+            when (event.key) {
+                Key.DirectionDown, Key.DirectionUp -> {
+                    onExitEdit()
+                    true
+                }
+                else -> false
             }
-            else -> false
+        } else {
+            false
         }
     }
 
